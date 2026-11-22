@@ -129,9 +129,6 @@
   font-size: 13px;
   font-weight: 650;
 }
-.gradeCards + .cardGroupHeading {
-  margin-top: 30px;
-}
 .lessons,
 .gradeCards {
   display: grid;

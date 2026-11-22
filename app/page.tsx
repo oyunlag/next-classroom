@@ -5,7 +5,7 @@ import LegacyPythonLink from "@/components/LegacyPythonLink";
 import { exercises as pythonExercises } from "@/lib/python/course";
 import { exercises as nextExercises } from "@/lib/course/lessons";
 import { lessons as webLessons } from "@/lib/web-lab/lessons";
-import { GradeCards, LessonCard, type LessonCardData } from "./lesson-cards";
+import { LessonCard, type LessonCardData } from "./lesson-cards";
 import styles from "./page.module.css";
 
 const lessons: LessonCardData[] = [
@@ -118,10 +118,6 @@ export default function Home() {
             <h2 id="choose-lesson">Хичээлээ сонгоорой</h2>
             <span>Өөрийн хурдаар</span>
           </div>
-          <div className={styles.cardGroupHeading}>
-            <p>Мэдээллийн технологи · Ангиар</p>
-          </div>
-          <GradeCards />
           <div className={styles.cardGroupHeading}>
             <p>Код бичих дадлага</p>
           </div>
