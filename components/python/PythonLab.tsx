@@ -25,10 +25,15 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { exercises, findExercise, modules } from "@/lib/python/course";
+import { exercises, modules } from "@/lib/python/course";
+import {
+  grade10Exercises,
+  grade10ExerciseGroups,
+  grade10Topics,
+} from "@/lib/python/grade-10-practice";
 import {
   getServerState,
   getState,
@@ -37,6 +42,7 @@ import {
   updateProgress,
 } from "@/lib/python/state";
 import type {
+  CourseModule,
   PythonExercise,
   RunResult,
   StudentProgress,
@@ -51,6 +57,11 @@ import { isFlowMode } from "@/lib/python/flow";
 
 const FlowVisualizer = dynamic(() => import("./FlowVisualizer"));
 
+const topicGroups = modules.map((module, index) => ({
+  ...module,
+  items: exercises.filter((exercise) => exercise.module === index),
+}));
+
 type Route = {
   view: "exercises" | "tests" | "play" | "visualize";
   id?: string;
@@ -61,13 +72,12 @@ function subscribeHash(listener: () => void) {
   return () => window.removeEventListener("hashchange", listener);
 }
 const getHash = () => window.location.hash;
-function parseRoute(hash: string, active: string): Route {
-  if (hash === "#/tests") return { view: "tests" };
+function parseRoute(hash: string, grade10Practice: boolean): Route {
+  if (!grade10Practice && hash === "#/tests") return { view: "tests" };
   if (hash === "#/play") return { view: "play" };
-  if (hash.startsWith("#/visualize"))
+  if (!grade10Practice && hash.startsWith("#/visualize"))
     return { view: "visualize", id: hash.split("/")[2] };
-  const requested = hash.split("/")[2];
-  return { view: "exercises", id: findExercise(requested ?? "")?.id ?? active };
+  return { view: "exercises", id: hash.split("/")[2] };
 }
 function navigate(view: Route["view"], id?: string) {
   window.location.hash =
@@ -79,11 +89,15 @@ function navigate(view: Route["view"], id?: string) {
 
 function ExerciseLesson({
   exercise,
+  topic,
+  showFlow,
   progress,
   onSolution,
   onReview,
 }: {
   exercise: PythonExercise;
+  topic: CourseModule;
+  showFlow: boolean;
   progress: StudentProgress;
   onSolution: () => void;
   onReview: () => void;
@@ -136,7 +150,7 @@ function ExerciseLesson({
           Сэдэв давтах <ArrowRight size={15} />
         </button>
       </div>
-      {exercise.module >= 2 && (
+      {showFlow && exercise.module >= 2 && (
         <a
           className="py-flow-lesson-link"
           href={`#/visualize/${exercise.module < 4 ? "if" : exercise.module === 5 ? "while" : "for"}`}
@@ -160,11 +174,9 @@ function ExerciseLesson({
       )}
       {review && (
         <div className="py-inline-review">
-          <h3>{modules[exercise.module].title}</h3>
-          <p>{modules[exercise.module].explanation}</p>
-          <pre className="py-code-example">
-            {modules[exercise.module].example}
-          </pre>
+          <h3>{topic.title}</h3>
+          <p>{topic.explanation}</p>
+          <pre className="py-code-example">{topic.example}</pre>
           <button className="py-text-button" onClick={onReview}>
             <BookOpen size={14} /> Бүх сэдвийн лавлах
           </button>
@@ -182,7 +194,17 @@ function ExerciseLesson({
   );
 }
 
-export default function PythonLab() {
+export default function PythonLab({
+  grade10Practice = false,
+}: {
+  grade10Practice?: boolean;
+}) {
+  const gradeLabel = grade10Practice ? "10-р анги" : "9, 10-р анги";
+  const backLabel = grade10Practice ? gradeLabel : "Хичээл сонгох";
+  const groups = grade10Practice ? grade10ExerciseGroups : topicGroups;
+  const topics = grade10Practice ? grade10Topics : modules;
+  const orderedExercises = grade10Practice ? grade10Exercises : exercises;
+  const activeField = grade10Practice ? "grade10Active" : "active";
   const state = useSyncExternalStore(subscribe, getState, getServerState);
   const hash = useSyncExternalStore(subscribeHash, getHash, serverHash);
   const [sidebar, setSidebar] = useState(false);
@@ -191,43 +213,49 @@ export default function PythonLab() {
   const [dialog, setDialog] = useState<
     "reference" | "progress" | "solution" | "reset" | "switch" | null
   >(null);
-  const route = parseRoute(hash, state.progress.active);
-  const exercise =
-    findExercise(
-      route.view === "exercises"
-        ? (route.id ?? state.progress.active)
-        : state.progress.active,
-    ) ?? exercises[0];
-  const index = exercises.indexOf(exercise);
+  const route = parseRoute(hash, grade10Practice);
   const { progress } = state;
+  const exercise =
+    orderedExercises.find(
+      ({ id }) => route.view === "exercises" && id === route.id,
+    ) ??
+    orderedExercises.find(({ id }) => id === progress[activeField]) ??
+    orderedExercises[0];
+  const { id: selectedId, starter } = exercise;
+  const exerciseId = route.view === "exercises" ? selectedId : undefined;
+  const index = orderedExercises.indexOf(exercise);
+  const currentGroup = groups.findIndex(({ items }) =>
+    items.includes(exercise),
+  );
   const draft = progress.drafts[exercise.id] ?? {
     code: exercise.starter,
     inputs: exercise.inputs?.join("\n") ?? "",
     solutionViewed: false,
   };
   const completed = progress.completed.includes(exercise.id);
-  const percent = Math.round(
-    (progress.completed.length / exercises.length) * 100,
-  );
+  const completedCount = orderedExercises.filter(({ id }) =>
+    progress.completed.includes(id),
+  ).length;
+  const percent = Math.round((completedCount / orderedExercises.length) * 100);
 
   useEffect(() => {
     if (
       state.student &&
-      route.view === "exercises" &&
-      route.id &&
-      route.id !== getState().progress.active
+      exerciseId &&
+      exerciseId !==
+        (getState().progress[activeField] ?? orderedExercises[0].id)
     )
-      updateProgress((current) => ({ ...current, active: route.id! }));
-  }, [route.id, route.view, state.student]);
+      updateProgress((current) => ({ ...current, [activeField]: exerciseId }));
+  }, [activeField, exerciseId, orderedExercises, state.student]);
 
   function select(id: string) {
+    const nextGroup = groups.findIndex(({ items }) =>
+      items.some((item) => item.id === id),
+    );
+    if (nextGroup < 0) return;
     setSidebar(false);
     navigate("exercises", id);
-    const next = findExercise(id);
-    if (next)
-      setCollapsed((current) =>
-        current.filter((module) => module !== next.module),
-      );
+    setCollapsed((current) => current.filter((group) => group !== nextGroup));
   }
 
   function saveDraft(
@@ -237,7 +265,11 @@ export default function PythonLab() {
   ) {
     updateProgress((current) => ({
       ...current,
-      completed: current.completed.filter((id) => id !== exercise.id),
+      completed:
+        viewed ||
+        code !== (current.drafts[exercise.id]?.code ?? exercise.starter)
+          ? current.completed.filter((id) => id !== exercise.id)
+          : current.completed,
       drafts: {
         ...current.drafts,
         [exercise.id]: { code, inputs, solutionViewed: viewed },
@@ -245,28 +277,25 @@ export default function PythonLab() {
     }));
   }
 
-  const checked = useCallback(
-    (code: string, result: RunResult) => {
-      const current = getState();
-      const currentDraft = current.progress.drafts[exercise.id];
-      if (
-        current.student !== state.student ||
-        (currentDraft?.code ?? exercise.starter) !== code ||
-        currentDraft?.solutionViewed
-      )
-        return;
-      if (
-        !result.error &&
-        result.checks.length > 0 &&
-        result.checks.every((check) => check.passed)
-      )
-        updateProgress((latest) => ({
-          ...latest,
-          completed: [...new Set([...latest.completed, exercise.id])],
-        }));
-    },
-    [exercise, state.student],
-  );
+  function checked(code: string, result: RunResult) {
+    const current = getState();
+    const currentDraft = current.progress.drafts[selectedId];
+    if (
+      current.student !== state.student ||
+      (currentDraft?.code ?? starter) !== code ||
+      currentDraft?.solutionViewed
+    )
+      return;
+    if (
+      !result.error &&
+      result.checks.length > 0 &&
+      result.checks.every((check) => check.passed)
+    )
+      updateProgress((latest) => ({
+        ...latest,
+        completed: [...new Set([...latest.completed, selectedId])],
+      }));
+  }
 
   if (!state.ready)
     return (
@@ -278,7 +307,7 @@ export default function PythonLab() {
   if (!state.student)
     return (
       <div className="py-app">
-        <StudentLogin />
+        <StudentLogin grade10Practice={grade10Practice} />
       </div>
     );
 
@@ -308,13 +337,13 @@ export default function PythonLab() {
             <Menu size={21} />
           </button>
           <a
-            href={`#/exercises/${progress.active}`}
+            href={`#/exercises/${exercise.id}`}
             aria-label="КодЛаб Python нүүр"
           >
             <Brand />
           </a>
           <span className="py-grade">
-            9, 10-р анги <span>·</span> Python
+            {gradeLabel} <span>·</span> Python
           </span>
         </div>
         <nav className="py-header-nav" aria-label="Үндсэн цэс">
@@ -325,31 +354,36 @@ export default function PythonLab() {
               { view: "play", label: "Чөлөөт код", icon: FlaskConical },
               { view: "visualize", label: "Кодын урсгал", icon: GitBranch },
             ] as const
-          ).map(({ view, label, icon: Icon }) => (
-            <a
-              key={view}
-              className={route.view === view ? "active" : ""}
-              href={
-                view === "exercises"
-                  ? `#/exercises/${progress.active}`
-                  : `#/${view}`
-              }
-            >
-              <Icon size={18} />
-              <span>{label}</span>
-            </a>
-          ))}
+          )
+            .filter(
+              ({ view }) =>
+                !grade10Practice || view === "exercises" || view === "play",
+            )
+            .map(({ view, label, icon: Icon }) => (
+              <a
+                key={view}
+                className={route.view === view ? "active" : ""}
+                href={
+                  view === "exercises"
+                    ? `#/exercises/${exercise.id}`
+                    : `#/${view}`
+                }
+              >
+                <Icon size={18} />
+                <span>{label}</span>
+              </a>
+            ))}
         </nav>
         <div className="py-header-actions">
           <Link
-            href="/"
+            href={grade10Practice ? "/curriculum/10" : "/"}
             className="py-lesson-chooser"
             prefetch={false}
-            aria-label="Хичээл сонгох"
-            title="Хичээл сонгох"
+            aria-label={backLabel}
+            title={backLabel}
           >
             <ArrowLeft size={15} aria-hidden="true" />
-            <span>Хичээл сонгох</span>
+            <span>{backLabel}</span>
           </Link>
           <button
             className="py-student-button"
@@ -370,7 +404,7 @@ export default function PythonLab() {
             <BarChart3 size={18} />
             <span>Миний ахиц</span>
             <strong>
-              {progress.completed.length}/{exercises.length}
+              {completedCount}/{orderedExercises.length}
             </strong>
           </button>
         </div>
@@ -404,10 +438,12 @@ export default function PythonLab() {
       )}
       <aside
         className={`py-sidebar ${sidebar ? "open" : ""}`}
-        aria-label="Хичээлийн сэдвүүд"
+        aria-label={grade10Practice ? "Бодлогын түвшин" : "Хичээлийн сэдвүүд"}
       >
         <div className="py-sidebar-heading">
-          <span>ХИЧЭЭЛИЙН СЭДВҮҮД</span>
+          <span>
+            {grade10Practice ? "БОДЛОГЫН ТҮВШИН" : "ХИЧЭЭЛИЙН СЭДВҮҮД"}
+          </span>
           <button
             className="py-icon py-mobile-menu"
             aria-label="Цэс хаах"
@@ -417,19 +453,16 @@ export default function PythonLab() {
           </button>
         </div>
         <div className="py-course-links">
-          {modules.map((module, moduleIndex) => {
-            const items = exercises.filter(
-              (item) => item.module === moduleIndex,
-            );
+          {groups.map(({ title, color, fresh, items }, groupIndex) => {
             const count = items.filter((item) =>
               progress.completed.includes(item.id),
             ).length;
             const isOpen =
-              !collapsed.includes(moduleIndex) &&
-              (moduleIndex === exercise.module ||
-                collapsed.includes(-moduleIndex - 1));
+              !collapsed.includes(groupIndex) &&
+              (groupIndex === currentGroup ||
+                collapsed.includes(-groupIndex - 1));
             return (
-              <div className="py-module" key={module.title}>
+              <div className="py-module" key={title}>
                 <button
                   className="py-module-button"
                   aria-expanded={isOpen}
@@ -438,24 +471,24 @@ export default function PythonLab() {
                       isOpen
                         ? [
                             ...current.filter(
-                              (value) => value !== -moduleIndex - 1,
+                              (value) => value !== -groupIndex - 1,
                             ),
-                            moduleIndex,
+                            groupIndex,
                           ]
                         : [
-                            ...current.filter((value) => value !== moduleIndex),
-                            -moduleIndex - 1,
+                            ...current.filter((value) => value !== groupIndex),
+                            -groupIndex - 1,
                           ],
                     )
                   }
                 >
-                  <span className={`py-module-number ${module.color}`}>
-                    {String(moduleIndex + 1).padStart(2, "0")}
+                  <span className={`py-module-number ${color}`}>
+                    {String(groupIndex + 1).padStart(2, "0")}
                   </span>
                   <span>
                     <strong>
-                      {module.title}
-                      {module.fresh && (
+                      {title}
+                      {fresh && (
                         <span className="py-new-dot" title="Шинэ сэдэв" />
                       )}
                     </strong>
@@ -502,13 +535,12 @@ export default function PythonLab() {
             <strong>{percent}%</strong>
           </div>
           <progress
-            max={exercises.length}
-            value={progress.completed.length}
+            max={orderedExercises.length}
+            value={completedCount}
             aria-label="Дасгалын гүйцэтгэл"
           />
           <p>
-            {progress.completed.length} / {exercises.length} дасгал бие даан
-            бодсон
+            {completedCount} / {orderedExercises.length} дасгал бие даан бодсон
           </p>
           <button
             className="py-secondary"
@@ -604,7 +636,7 @@ export default function PythonLab() {
         ) : (
           <main id="main-content" className="py-main">
             <div className="py-breadcrumb">
-              <span>{modules[exercise.module].title}</span>
+              <span>{topics[exercise.module].title}</span>
               <span>/</span>
               <span>Дасгал {String(index + 1).padStart(2, "0")}</span>
             </div>
@@ -623,7 +655,7 @@ export default function PythonLab() {
                 </span>
               </div>
             </div>
-            {exercise.module < 4 && (
+            {!grade10Practice && exercise.module < 4 && (
               <div className="py-next-topic">
                 <div>
                   <span className="py-next-symbol">for</span>
@@ -641,6 +673,8 @@ export default function PythonLab() {
               <ExerciseLesson
                 key={`${exercise.id}-${state.student}`}
                 exercise={exercise}
+                topic={topics[exercise.module]}
+                showFlow={!grade10Practice}
                 progress={progress}
                 onSolution={() => setDialog("solution")}
                 onReview={() => setDialog("reference")}
@@ -662,20 +696,28 @@ export default function PythonLab() {
               <button
                 className="py-text-button"
                 disabled={index === 0}
-                onClick={() => select(exercises[index - 1].id)}
+                onClick={() => select(orderedExercises[index - 1].id)}
               >
                 <ArrowLeft size={16} /> Өмнөх дасгал
               </button>
               <span>
-                Дасгал <strong>{index + 1}</strong> / {exercises.length}
+                Дасгал <strong>{index + 1}</strong> / {orderedExercises.length}
               </span>
-              {index < exercises.length - 1 ? (
+              {index < orderedExercises.length - 1 ? (
                 <button
                   className="py-text-button"
-                  onClick={() => select(exercises[index + 1].id)}
+                  onClick={() => select(orderedExercises[index + 1].id)}
                 >
                   Дараагийн дасгал <ArrowRight size={16} />
                 </button>
+              ) : grade10Practice ? (
+                <Link
+                  className="py-text-button"
+                  href="/curriculum/10"
+                  prefetch={false}
+                >
+                  10-р ангийн хичээл <ArrowRight size={16} />
+                </Link>
               ) : (
                 <button
                   className="py-text-button"
@@ -689,13 +731,13 @@ export default function PythonLab() {
         )}
         <footer className="py-app-bottom">
           <span>Алхам бүр ахиц.</span>
-          <span>КодЛаб · 9, 10-р анги · Python</span>
+          <span>КодЛаб · {gradeLabel} · Python</span>
         </footer>
       </div>
       {dialog === "reference" && (
         <Dialog title="Python товч лавлах" onClose={() => setDialog(null)} wide>
           <div className="py-reference-grid">
-            {modules.map((module) => (
+            {topics.map((module) => (
               <section key={module.title}>
                 <h3>
                   <span className={`py-module-symbol ${module.color}`}>
@@ -724,38 +766,34 @@ export default function PythonLab() {
             <div>
               <h3>{state.student}</h3>
               <p>
-                {progress.completed.length} / {exercises.length} дасгал бие даан
+                {completedCount} / {orderedExercises.length} дасгал бие даан
                 бодсон
               </p>
             </div>
           </div>
           <div className="py-progress-modules">
-            {modules.map((module, moduleIndex) => {
-              const items = exercises.filter(
-                (item) => item.module === moduleIndex,
-              );
+            {groups.map(({ title, items }) => {
               const count = items.filter((item) =>
                 progress.completed.includes(item.id),
               ).length;
               return (
-                <div key={module.title}>
-                  <span>{module.title}</span>
+                <div key={title}>
+                  <span>{title}</span>
                   <strong>
                     {count}/{items.length}
                   </strong>
                   <progress
                     max={items.length}
                     value={count}
-                    aria-label={module.title}
+                    aria-label={title}
                   />
                 </div>
               );
             })}
           </div>
           <p className="py-muted">
-            Ахиц зөвхөн энэ браузерт, энэ ID-гаар хадгалагдана. Энэ нь нууц
-            үгтэй бүртгэл биш. Жишээ хариу үзсэн дасгалыг бие даасан гүйцэтгэлд
-            тооцохгүй.
+            Код, ахиц сурагчийн ID-гаар серверт хадгалагдана. Жишээ хариу үзсэн
+            дасгалыг бие даасан гүйцэтгэлд тооцохгүй.
           </p>
           <button
             className="py-secondary"

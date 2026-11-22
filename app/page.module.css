@@ -132,16 +132,6 @@
 .gradeCards + .cardGroupHeading {
   margin-top: 30px;
 }
-.cardGroupHeading a {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 44px;
-  color: var(--lab-blue);
-}
-.cardGroupHeading a:hover {
-  text-decoration: underline;
-}
 .lessons,
 .gradeCards {
   display: grid;

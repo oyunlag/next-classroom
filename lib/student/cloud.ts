@@ -20,12 +20,19 @@ export const messages = {
     "Өөр цонхонд ахиц өөрчлөгдсөн. Өөрийн ажлыг татаад серверийн ахицыг ачаална уу.",
 };
 type CloudStatus = keyof typeof messages;
-type Backup = { key: string; raw: string; revision: number; pending: Snapshot };
+type Backup = {
+  key: string;
+  raw: string;
+  revision: number;
+  pending: Snapshot;
+  sent?: Snapshot;
+};
 type Session = {
   id: string;
   key: string;
   revision: number;
   pending: Snapshot | null;
+  sent: Snapshot | null;
   busy: boolean;
   blocked: "conflict" | "rejected" | "examActive" | null;
   inherited: Backup[];
@@ -33,6 +40,23 @@ type Session = {
   timer?: ReturnType<typeof setTimeout>;
 };
 const SAVE_INTERVAL = 5000;
+const KEEPALIVE_BYTES = 60 * 1024;
+
+function statusCode(error: unknown) {
+  return error instanceof Error &&
+    "status" in error &&
+    typeof error.status === "number"
+    ? error.status
+    : 0;
+}
+
+function removeBackup({ key, raw }: Backup) {
+  try {
+    if (localStorage.getItem(key) === raw) localStorage.removeItem(key);
+  } catch {
+    /* The current tab's backup remains independent. */
+  }
+}
 
 function readBackups(base: string): Backup[] {
   const backups: Backup[] = [];
@@ -57,6 +81,7 @@ function readBackups(base: string): Backup[] {
             raw,
             revision: data.revision,
             pending: data.pending,
+            sent: isProgressSnapshot(data.sent) ? data.sent : undefined,
           });
       } catch {
         /* Ignore a damaged backup without losing other copies. */
@@ -79,10 +104,15 @@ export function createCloudProgress(
   async function request(
     body: ProgressRequest,
   ): Promise<{ revision: number; progress: Snapshot | null }> {
+    const payload = JSON.stringify(body);
     const response = await fetch("/api/progress", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: payload,
+      keepalive:
+        body.action === "save" &&
+        payload.length <= KEEPALIVE_BYTES &&
+        new TextEncoder().encode(payload).byteLength <= KEEPALIVE_BYTES,
       signal: timeoutSignal(15000),
     });
     if (!response.ok)
@@ -119,7 +149,11 @@ export function createCloudProgress(
       if (s.pending)
         localStorage.setItem(
           s.key,
-          JSON.stringify({ revision: s.revision, pending: s.pending }),
+          JSON.stringify({
+            revision: s.revision,
+            pending: s.pending,
+            sent: s.sent && s.sent !== s.pending ? s.sent : undefined,
+          }),
         );
       else localStorage.removeItem(s.key);
     } catch {
@@ -133,6 +167,26 @@ export function createCloudProgress(
       void flush(s);
     }, delay);
   }
+  async function saveSnapshot(s: Session, progress: Snapshot) {
+    try {
+      return await request({
+        action: "save",
+        course,
+        studentId: s.id,
+        revision: s.revision,
+        progress,
+      });
+    } catch (error) {
+      if (statusCode(error) !== 409) throw error;
+      const remote = await request({ action: "load", course, studentId: s.id });
+      if (
+        remote.revision > s.revision &&
+        JSON.stringify(remote.progress) === JSON.stringify(progress)
+      )
+        return remote;
+      throw error;
+    }
+  }
   async function flush(s: Session | null = session): Promise<void> {
     if (!s || s.busy || s.blocked || !s.pending) return;
     if (session === s) {
@@ -140,37 +194,22 @@ export function createCloudProgress(
       s.timer = undefined;
     }
     s.busy = true;
-    const pending = s.pending;
+    const pending = s.sent ?? s.pending;
+    s.sent = pending;
+    backup(s);
     report(s, "saving");
     try {
-      const result = await request({
-        action: "save",
-        course,
-        studentId: s.id,
-        revision: s.revision,
-        progress: pending,
-      });
+      const result = await saveSnapshot(s, pending);
       s.revision = result.revision;
       s.lastSaved = JSON.stringify(pending);
       if (s.pending === pending) s.pending = null;
+      s.sent = null;
       backup(s);
-      for (const previous of s.inherited) {
-        try {
-          if (localStorage.getItem(previous.key) === previous.raw)
-            localStorage.removeItem(previous.key);
-        } catch {
-          /* The current tab's backup remains independent. */
-        }
-      }
+      s.inherited.forEach(removeBackup);
       s.inherited = [];
       report(s, s.pending ? "saving" : "saved");
     } catch (error) {
-      const status =
-        error instanceof Error &&
-        "status" in error &&
-        typeof error.status === "number"
-          ? error.status
-          : 0;
+      const status = statusCode(error);
       s.blocked =
         status === 423
           ? "examActive"
@@ -185,7 +224,10 @@ export function createCloudProgress(
     } finally {
       s.busy = false;
     }
-    if (s.pending) schedule(s);
+    if (s.pending) {
+      if (session === s) schedule(s);
+      else void flush(s);
+    }
   }
   function stop() {
     if (!session) return;
@@ -203,6 +245,7 @@ export function createCloudProgress(
         key: `${base}:pending:${crypto.getRandomValues(new Uint32Array(2)).join("-")}`,
         revision: 0,
         pending: null,
+        sent: null,
         busy: false,
         blocked: null,
         inherited: [],
@@ -220,7 +263,20 @@ export function createCloudProgress(
       if (session !== s) throw new Error("Сурагч солигдсон. Дахин орно уу.");
       s.revision = remote.revision;
       s.lastSaved = JSON.stringify(remote.progress);
-      s.inherited = readBackups(base);
+      s.inherited = readBackups(base).flatMap((previous) => {
+        if (JSON.stringify(previous.pending) === s.lastSaved) {
+          removeBackup(previous);
+          return [];
+        }
+        if (
+          previous.revision + 1 === remote.revision &&
+          previous.sent &&
+          JSON.stringify(previous.sent) === s.lastSaved
+        ) {
+          return [{ ...previous, revision: remote.revision, sent: undefined }];
+        }
+        return [previous];
+      });
       const cached = s.inherited[0];
       const copies = new Set(
         s.inherited.map(({ revision, pending }) =>
@@ -237,6 +293,7 @@ export function createCloudProgress(
         report(s, "conflict");
         return progress;
       }
+      s.sent = cached?.sent ?? null;
       backup(s);
       if (s.pending) void flush(s);
       else report(s, "saved");
@@ -275,12 +332,7 @@ export function createCloudProgress(
       link.download = `${course}-${session.id}-unsent.json`;
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      for (const previous of session.inherited) {
-        try {
-          if (localStorage.getItem(previous.key) === previous.raw)
-            localStorage.removeItem(previous.key);
-        } catch {}
-      }
+      session.inherited.forEach(removeBackup);
       try {
         localStorage.removeItem(session.key);
       } catch {}

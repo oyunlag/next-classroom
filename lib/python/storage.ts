@@ -1,4 +1,5 @@
 import { exercises, findExercise } from "./course";
+import { grade10Exercises } from "./grade-10-practice";
 import type { StudentProgress } from "./types";
 
 export const SESSION_KEY = "python-lab:student:v1";
@@ -31,8 +32,16 @@ export function restoreProgress(raw: string | null): StudentProgress {
   try {
     const data: unknown = JSON.parse(raw);
     if (!record(data) || data.version !== 1) return clean;
-    if (typeof data.active === "string" && findExercise(data.active))
+    if (
+      typeof data.active === "string" &&
+      exercises.some(({ id }) => id === data.active)
+    )
       clean.active = data.active;
+    if (
+      typeof data.grade10Active === "string" &&
+      grade10Exercises.some(({ id }) => id === data.grade10Active)
+    )
+      clean.grade10Active = data.grade10Active;
     if (record(data.drafts)) {
       for (const [id, draft] of Object.entries(data.drafts)) {
         if (

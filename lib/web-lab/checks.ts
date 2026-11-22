@@ -1,6 +1,66 @@
 import type { CardExercise, Check } from "./lessons";
 import { games, type GameId, type GameResult } from "./games";
-export type CheckResult = { label: string; passed: boolean };
+export type CheckResult = { label: string; passed: boolean; detail?: string };
+
+const borderWidth = /^border-(top|right|bottom|left)-width$/;
+const pixels = /^-?\d+(?:\.\d+)?px$/;
+
+function checkStyle(
+  document: Document,
+  element: Element,
+  property: string,
+  expected: string,
+) {
+  const view = document.defaultView;
+  const computed = view?.getComputedStyle(element);
+  const actual = computed?.getPropertyValue(property).trim() ?? "";
+  if (!view || !computed) return { actual, passed: false };
+
+  if (
+    borderWidth.test(property) &&
+    expected !== "0px" &&
+    element instanceof view.HTMLElement &&
+    "zoom" in element.style
+  ) {
+    // CSS borders are snapped to device pixels. Measure at a higher effective
+    // zoom to distinguish nearby declarations that paint the same border.
+    const originalStyle = element.getAttribute("style");
+    const ownZoom = Number.parseFloat(computed.getPropertyValue("zoom")) || 1;
+    const effectiveZoom = element.currentCSSZoom || ownZoom;
+    element.style.setProperty(
+      "zoom",
+      String((8 * ownZoom) / effectiveZoom),
+      "important",
+    );
+    try {
+      const normalized = view
+        .getComputedStyle(element)
+        .getPropertyValue(property);
+      return {
+        actual: normalized,
+        passed:
+          pixels.test(normalized) &&
+          Math.abs(
+            Number.parseFloat(normalized) - Number.parseFloat(expected),
+          ) < 0.25,
+      };
+    } finally {
+      if (originalStyle === null) element.removeAttribute("style");
+      else element.setAttribute("style", originalStyle);
+    }
+  }
+
+  if (actual === expected) return { actual, passed: true };
+  if (!pixels.test(actual) || !pixels.test(expected))
+    return { actual, passed: false };
+  const declared = element.computedStyleMap?.().get(property)?.toString();
+  return {
+    actual,
+    passed:
+      declared === expected ||
+      Math.abs(Number.parseFloat(actual) - Number.parseFloat(expected)) < 0.05,
+  };
+}
 
 export function checkGame(game: GameId, result: GameResult): CheckResult[] {
   if ("error" in result) return [{ label: result.error, passed: false }];
@@ -28,7 +88,12 @@ export function checkExercise(
       };
     }
     const element = document.querySelector(check.selector);
-    if (!element) return { label: check.label, passed: false };
+    if (!element)
+      return {
+        label: check.label,
+        passed: false,
+        detail: `${check.selector} элемент олдсонгүй.`,
+      };
     let passed = false;
     switch (check.kind) {
       case "element":
@@ -52,12 +117,23 @@ export function checkExercise(
         );
         break;
       }
-      case "style":
-        passed =
-          document.defaultView
-            ?.getComputedStyle(element)
-            .getPropertyValue(check.property) === check.value;
-        break;
+      case "style": {
+        const result = checkStyle(
+          document,
+          element,
+          check.property,
+          check.value,
+        );
+        return {
+          label: check.label,
+          passed: result.passed,
+          ...(result.passed
+            ? {}
+            : {
+                detail: `${check.property}: ${result.actual || "утга алга"} → ${check.value}`,
+              }),
+        };
+      }
       case "style-not": {
         const value = document.defaultView
           ?.getComputedStyle(element)

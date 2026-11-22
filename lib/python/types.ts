@@ -65,6 +65,7 @@ export type RunResult = {
 export type StudentProgress = {
   version: 1;
   active: string;
+  grade10Active?: string;
   drafts: Record<
     string,
     { code: string; inputs: string; solutionViewed: boolean }

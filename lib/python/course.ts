@@ -1,3 +1,4 @@
+import { grade10Exercises } from "./grade-10-practice";
 import type {
   CourseModule,
   PythonExercise,
@@ -910,5 +911,7 @@ export const exercises: PythonExercise[] = [
   },
 ];
 
+export const allExercises = [...exercises, ...grade10Exercises];
+
 export const findExercise = (id: string) =>
-  exercises.find((exercise) => exercise.id === id);
+  allExercises.find((exercise) => exercise.id === id);

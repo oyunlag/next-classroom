@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
-import { exercises, modules } from "./course";
+import { allExercises, exercises, modules } from "./course";
+import {
+  grade10ExerciseGroups,
+  grade10Exercises,
+  grade10Topics,
+} from "./grade-10-practice";
 import { questions } from "./questions";
 import {
   emptyProgress,
@@ -18,17 +25,23 @@ const harness = readFileSync(
 );
 function python(requests: object[]) {
   const source = `${harness}\nimport sys\nrequests = json.load(sys.stdin)\nprint(json.dumps([run_request(request) for request in requests], ensure_ascii=False))`;
-  const result = spawnSync("python3", ["-c", source], {
-    input: JSON.stringify(requests),
-    encoding: "utf8",
-    timeout: 15000,
-  });
-  assert.equal(result.status, 0, result.stderr);
-  return JSON.parse(result.stdout) as {
-    output: string;
-    error?: string;
-    checks: { label: string; passed: boolean }[];
-  }[];
+  const directory = mkdtempSync(join(tmpdir(), "kodlab-python-"));
+  try {
+    const result = spawnSync("python3", ["-c", source], {
+      cwd: directory,
+      input: JSON.stringify(requests),
+      encoding: "utf8",
+      timeout: 15000,
+    });
+    assert.equal(result.status, 0, result.stderr);
+    return JSON.parse(result.stdout) as {
+      output: string;
+      error?: string;
+      checks: { label: string; passed: boolean }[];
+    }[];
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 }
 
 test("the course has 28 unique exercises across seven modules and a quiz per module", () => {
@@ -51,7 +64,7 @@ test("the course has 28 unique exercises across seven modules and a quiz per mod
 
 test("every Python solution passes all structure and behavior checks", () => {
   const results = python(
-    exercises.map((exercise) => ({
+    allExercises.map((exercise) => ({
       mode: "check",
       code: exercise.solution,
       tests: exercise.tests,
@@ -59,27 +72,79 @@ test("every Python solution passes all structure and behavior checks", () => {
     })),
   );
   results.forEach((result, index) => {
-    assert(!result.error, `${exercises[index].id}: ${result.error}`);
+    assert(!result.error, `${allExercises[index].id}: ${result.error}`);
     assert(result.checks.length > 0);
     assert.deepEqual(
       result.checks.filter((check) => !check.passed),
       [],
-      exercises[index].id,
+      allExercises[index].id,
     );
   });
 });
 
 test("every sample runs with its supplied input and produces the stated output", () => {
   const results = python(
-    exercises.map((exercise) => ({
+    allExercises.map((exercise) => ({
       code: exercise.solution,
       inputs: exercise.inputs ?? [],
     })),
   );
   results.forEach((result, index) => {
-    assert(!result.error, `${exercises[index].id}: ${result.error}`);
-    assert.equal(result.output, exercises[index].expected, exercises[index].id);
+    assert(!result.error, `${allExercises[index].id}: ${result.error}`);
+    assert.equal(
+      result.output,
+      allExercises[index].expected,
+      allExercises[index].id,
+    );
   });
+});
+
+test("Grade 10 has 30 additional problems ordered by difficulty across its Python topics", () => {
+  assert.equal(grade10Exercises.length, 30);
+  assert.equal(
+    new Set(allExercises.map(({ id }) => id)).size,
+    allExercises.length,
+  );
+  assert.deepEqual(
+    grade10ExerciseGroups.map(({ title }) => title),
+    ["Эхлэл", "Дадлага", "Сорилт"],
+  );
+  assert.deepEqual(
+    grade10ExerciseGroups.map(({ items }) => items.length),
+    [10, 10, 10],
+  );
+  for (const { title, items } of grade10ExerciseGroups) {
+    assert(
+      items.every(({ level, tests }) => level === title && tests.length >= 3),
+    );
+    assert(new Set(items.map(({ module }) => module)).size > 1);
+  }
+  assert.deepEqual(
+    new Set(grade10Exercises.map(({ module }) => module)),
+    new Set(grade10Topics.keys()),
+  );
+});
+
+test("restoring Python progress keeps the saved position and completion in both banks", () => {
+  const restored = restoreProgress(
+    JSON.stringify({
+      ...emptyProgress(),
+      active: "battery",
+      grade10Active: "g10-warm-streak",
+      completed: ["battery", "g10-warm-streak"],
+      drafts: {
+        "g10-warm-streak": {
+          code: "print(2)",
+          inputs: "15\n18 16",
+          solutionViewed: false,
+        },
+      },
+    }),
+  );
+  assert.equal(restored.active, "battery");
+  assert.equal(restored.grade10Active, "g10-warm-streak");
+  assert.deepEqual(restored.completed, ["battery", "g10-warm-streak"]);
+  assert.equal(restored.drafts["g10-warm-streak"].code, "print(2)");
 });
 
 test("hard-coded output and a wrong boundary cannot pass the battery exercise", () => {

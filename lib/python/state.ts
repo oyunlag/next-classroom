@@ -45,7 +45,9 @@ export function subscribe(listener: () => void) {
 export async function login(value: string) {
   const student = normalizeStudent(value);
   if (!validStudent(student))
-    throw new Error("2–40 үсэг, тоо, цэг, зураас эсвэл доогуур зураас ашиглаарай.");
+    throw new Error(
+      "2–40 үсэг, тоо, цэг, зураас эсвэл доогуур зураас ашиглаарай.",
+    );
   let local = emptyProgress();
   try {
     local = restoreProgress(localStorage.getItem(storageKey(student)));
@@ -77,7 +79,8 @@ export function updateProgress(
   change: (progress: StudentProgress) => StudentProgress,
 ) {
   if (!state.student) return;
-  const progress = change(state.progress);
+  const previous = state.progress;
+  const progress = change(previous);
   let saving = true;
   try {
     localStorage.setItem(storageKey(state.student), JSON.stringify(progress));
@@ -86,6 +89,7 @@ export function updateProgress(
   }
   state = { ...state, progress, saving };
   cloud.save(progress);
+  if (progress.completed.length > previous.completed.length) void cloud.flush();
   emit();
 }
 if (typeof window !== "undefined") {

@@ -120,9 +120,6 @@ export default function Home() {
           </div>
           <div className={styles.cardGroupHeading}>
             <p>Мэдээллийн технологи · Ангиар</p>
-            <Link href="/practice-tests" prefetch={false}>
-              Давтлагын тест <ArrowRight size={15} aria-hidden="true" />
-            </Link>
           </div>
           <GradeCards />
           <div className={styles.cardGroupHeading}>

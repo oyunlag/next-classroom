@@ -67,11 +67,19 @@ const courses = {
 export default function CourseEntry({
   course,
   onLogin,
+  placement,
 }: {
   course: keyof typeof courses;
   onLogin: (id: string) => Promise<unknown>;
+  placement?: {
+    grade: string;
+    backHref: string;
+    features: string[];
+  };
 }) {
   const info = courses[course];
+  const backHref = placement?.backHref ?? "/";
+  const backLabel = placement?.grade ?? "Хичээл сонгох";
   const [id, setId] = useState("");
   const [error, setError] = useState("");
   const [examActive, setExamActive] = useState(false);
@@ -81,10 +89,10 @@ export default function CourseEntry({
     <div className={`classroom-entry entry-${course}`} lang="mn">
       <header className="classroom-entry-header">
         <Link
-          href="/"
+          href={backHref}
           className="classroom-wordmark"
           prefetch={false}
-          aria-label="КодЛаб · Хичээл сонгох"
+          aria-label={`КодЛаб · ${backLabel}`}
         >
           <span className="classroom-logo">
             <Code2 size={23} />
@@ -93,8 +101,8 @@ export default function CourseEntry({
             Код<span>Лаб</span>
           </span>
         </Link>
-        <Link href="/" className="classroom-back" prefetch={false}>
-          <ArrowLeft size={16} /> Хичээл сонгох
+        <Link href={backHref} className="classroom-back" prefetch={false}>
+          <ArrowLeft size={16} /> {backLabel}
         </Link>
       </header>
       <main id="main-content" className="classroom-entry-main">
@@ -103,7 +111,7 @@ export default function CourseEntry({
             <span>{info.mark}</span>
             <strong>{info.name}</strong>
             <i />
-            {info.grade}
+            {placement?.grade ?? info.grade}
           </div>
           <h1 id="course-heading">{info.title}</h1>
           <p>{info.description}</p>
@@ -121,7 +129,7 @@ export default function CourseEntry({
             </div>
           </div>
           <ul className="classroom-features">
-            {info.features.map((feature) => (
+            {(placement?.features ?? info.features).map((feature) => (
               <li key={feature}>
                 <Check size={15} />
                 {feature}

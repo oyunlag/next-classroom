@@ -1,5 +1,5 @@
 import {
-  exercises as pythonExercises,
+  allExercises as pythonExercises,
   modules as pythonModules,
 } from "../python/course";
 import { questions as pythonQuestions } from "../python/questions";

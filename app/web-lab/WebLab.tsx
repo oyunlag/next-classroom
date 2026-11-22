@@ -51,6 +51,7 @@ export default function WebLab({ sampleImage }: { sampleImage: string }) {
   function update(next: Progress) {
     setProgress(next);
     cloud.save(next);
+    if (next.completed.length > progress.completed.length) void cloud.flush();
   }
 
   return (

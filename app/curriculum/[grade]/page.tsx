@@ -5,6 +5,7 @@ import { findGrade, gradePlans, lessonHref } from "@/lib/curriculum";
 import LessonExplorer from "../_components/LessonExplorer";
 import styles from "../curriculum.module.css";
 import { practiceTestHref } from "@/lib/curriculum/practice";
+import { grade10Exercises } from "@/lib/python/grade-10-practice";
 
 export function generateStaticParams() {
   return gradePlans.map(({ grade }) => ({ grade: String(grade) }));
@@ -56,6 +57,15 @@ export default async function GradePage({
           >
             Давтлагын тест →
           </Link>
+          {plan.grade === 10 && (
+            <Link
+              className={styles.textLink}
+              href="/python/grade-10"
+              prefetch={false}
+            >
+              Python · {grade10Exercises.length} шинэ бодлого →
+            </Link>
+          )}
           <span className={styles.muted}>
             Хичээл бүрд 6 нэмэлт дасгал · 3 түвшин
           </span>

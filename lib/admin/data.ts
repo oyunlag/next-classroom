@@ -111,14 +111,19 @@ export async function roster(teacherId: string): Promise<Roster> {
     if (!courses.includes(p.course as Course)) continue;
     const row = get(p.studentId);
     const course = p.course as Course;
-    row.courses[course] = p.adminSummary || {
-      completed: 0,
-      total: catalog[course].length,
-      attempted: 0,
-      assisted: 0,
-      active: "",
-      quizzes: [],
-    };
+    row.courses[course] = p.adminSummary
+      ? {
+          ...p.adminSummary,
+          total: catalog[course].length,
+        }
+      : {
+          completed: 0,
+          total: catalog[course].length,
+          attempted: 0,
+          assisted: 0,
+          active: "",
+          quizzes: [],
+        };
     const timestamp =
       p.updatedAt instanceof Date ? p.updatedAt.toISOString() : null;
     if (timestamp && (!row.updatedAt || timestamp > row.updatedAt))

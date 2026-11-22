@@ -783,7 +783,7 @@ export default function Workspace({
                                 {feedback}
                               </p>
                               <ul>
-                                {checks.map(({ label, passed }) => (
+                                {checks.map(({ label, passed, detail }) => (
                                   <li
                                     key={label}
                                     className={
@@ -795,7 +795,15 @@ export default function Workspace({
                                     ) : (
                                       <X size={17} aria-hidden="true" />
                                     )}
-                                    <span>{label}</span>
+                                    <span>
+                                      {label}
+                                      {detail && (
+                                        <>
+                                          <br />
+                                          <code>{detail}</code>
+                                        </>
+                                      )}
+                                    </span>
                                   </li>
                                 ))}
                               </ul>

@@ -177,6 +177,34 @@ test("game solutions pass their layout and all outcomes, and starters need work"
   }
 });
 
+test("CSS measurement tolerates subpixel rounding and reports a genuinely wrong value", () => {
+  const exercise = findExercise("eight-ball-css");
+  const render = (width: string) => {
+    const files = {
+      ...exercise.solution,
+      "style.css": exercise.solution["style.css"].replace(
+        "width: 176px",
+        `width: ${width}`,
+      ),
+    };
+    const page = new JSDOM(cardDocument(files, sampleImage, document).html);
+    try {
+      return checkExercise(exercise, page.window.document);
+    } finally {
+      page.window.close();
+    }
+  };
+  assert(render("175.99px").every(({ passed }) => passed));
+  const failures = render("175px").filter(({ passed }) => !passed);
+  assert.deepEqual(failures, [
+    {
+      label: "Бөмбөг 176px өргөнтэй",
+      passed: false,
+      detail: "width: 175px → 176px",
+    },
+  ]);
+});
+
 test("the eight ball uses the supplied controls, preserves drafts and plays in a standalone download", async () => {
   const exercise = findExercise("eight-ball-logic");
   const progress = readProgress({
