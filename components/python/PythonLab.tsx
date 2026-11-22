@@ -28,7 +28,12 @@ import {
 import { useEffect, useState, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { exercises, modules } from "@/lib/python/course";
+import {
+  allExercises,
+  exercises,
+  findExercise,
+  modules,
+} from "@/lib/python/course";
 import {
   grade10Exercises,
   grade10ExerciseGroups,
@@ -61,6 +66,13 @@ const topicGroups = modules.map((module, index) => ({
   ...module,
   items: exercises.filter((exercise) => exercise.module === index),
 }));
+const mainGroups = [
+  ...grade10ExerciseGroups.map((group) => ({
+    ...group,
+    title: `10-р анги · ${group.title}`,
+  })),
+  ...topicGroups,
+];
 
 type Route = {
   view: "exercises" | "tests" | "play" | "visualize";
@@ -201,9 +213,8 @@ export default function PythonLab({
 }) {
   const gradeLabel = grade10Practice ? "10-р анги" : "9, 10-р анги";
   const backLabel = grade10Practice ? gradeLabel : "Хичээл сонгох";
-  const groups = grade10Practice ? grade10ExerciseGroups : topicGroups;
-  const topics = grade10Practice ? grade10Topics : modules;
-  const orderedExercises = grade10Practice ? grade10Exercises : exercises;
+  const groups = grade10Practice ? grade10ExerciseGroups : mainGroups;
+  const orderedExercises = grade10Practice ? grade10Exercises : allExercises;
   const activeField = grade10Practice ? "grade10Active" : "active";
   const state = useSyncExternalStore(subscribe, getState, getServerState);
   const hash = useSyncExternalStore(subscribeHash, getHash, serverHash);
@@ -215,12 +226,17 @@ export default function PythonLab({
   >(null);
   const route = parseRoute(hash, grade10Practice);
   const { progress } = state;
+  const requestedExercise =
+    route.view === "exercises" && route.id ? findExercise(route.id) : undefined;
   const exercise =
-    orderedExercises.find(
-      ({ id }) => route.view === "exercises" && id === route.id,
-    ) ??
+    (requestedExercise && orderedExercises.includes(requestedExercise)
+      ? requestedExercise
+      : undefined) ??
     orderedExercises.find(({ id }) => id === progress[activeField]) ??
     orderedExercises[0];
+  const isGrade10Exercise = grade10Exercises.includes(exercise);
+  const topics = isGrade10Exercise ? grade10Topics : modules;
+  const topic = topics[exercise.module];
   const { id: selectedId, starter } = exercise;
   const exerciseId = route.view === "exercises" ? selectedId : undefined;
   const index = orderedExercises.indexOf(exercise);
@@ -245,8 +261,21 @@ export default function PythonLab({
       exerciseId !==
         (getState().progress[activeField] ?? orderedExercises[0].id)
     )
-      updateProgress((current) => ({ ...current, [activeField]: exerciseId }));
-  }, [activeField, exerciseId, orderedExercises, state.student]);
+      updateProgress((current) => ({
+        ...current,
+        [activeField]: exerciseId,
+        ...(!grade10Practice && isGrade10Exercise
+          ? { grade10Active: exerciseId }
+          : {}),
+      }));
+  }, [
+    activeField,
+    exerciseId,
+    grade10Practice,
+    isGrade10Exercise,
+    orderedExercises,
+    state.student,
+  ]);
 
   function select(id: string) {
     const nextGroup = groups.findIndex(({ items }) =>
@@ -636,7 +665,10 @@ export default function PythonLab({
         ) : (
           <main id="main-content" className="py-main">
             <div className="py-breadcrumb">
-              <span>{topics[exercise.module].title}</span>
+              <span>
+                {!grade10Practice && isGrade10Exercise && "10-р анги · "}
+                {topic.title}
+              </span>
               <span>/</span>
               <span>Дасгал {String(index + 1).padStart(2, "0")}</span>
             </div>
@@ -655,7 +687,7 @@ export default function PythonLab({
                 </span>
               </div>
             </div>
-            {!grade10Practice && exercise.module < 4 && (
+            {!isGrade10Exercise && exercise.module < 4 && (
               <div className="py-next-topic">
                 <div>
                   <span className="py-next-symbol">for</span>
@@ -673,8 +705,8 @@ export default function PythonLab({
               <ExerciseLesson
                 key={`${exercise.id}-${state.student}`}
                 exercise={exercise}
-                topic={topics[exercise.module]}
-                showFlow={!grade10Practice}
+                topic={topic}
+                showFlow={!isGrade10Exercise}
                 progress={progress}
                 onSolution={() => setDialog("solution")}
                 onReview={() => setDialog("reference")}

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowRight, Check, Cloud, Code2, Monitor } from "lucide-react";
 import { exercises as javascriptExercises } from "@/apps/kodlab/src/content.js";
 import LegacyPythonLink from "@/components/LegacyPythonLink";
-import { exercises as pythonExercises } from "@/lib/python/course";
+import { allExercises as pythonExercises } from "@/lib/python/course";
 import { exercises as nextExercises } from "@/lib/course/lessons";
 import { lessons as webLessons } from "@/lib/web-lab/lessons";
 import { LessonCard, type LessonCardData } from "./lesson-cards";
@@ -28,7 +28,8 @@ const lessons: LessonCardData[] = [
     mark: "Py",
     grade: "9, 10-р анги",
     count: `${pythonExercises.length} дасгал`,
-    description: "Бодлого бодож, алгоритмаа код болгоорой.",
+    description:
+      "Суурь Python дасгал болон 10-р ангийн нэгдсэн бодлогуудыг бодоорой.",
     topics: ["Хувьсагч", "Нөхцөл", "Давталт"],
     code: 'for i in range(3):\n    print("Би чадна!")',
     file: "hello.py",

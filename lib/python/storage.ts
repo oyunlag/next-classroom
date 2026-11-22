@@ -32,16 +32,15 @@ export function restoreProgress(raw: string | null): StudentProgress {
   try {
     const data: unknown = JSON.parse(raw);
     if (!record(data) || data.version !== 1) return clean;
-    if (
-      typeof data.active === "string" &&
-      exercises.some(({ id }) => id === data.active)
-    )
-      clean.active = data.active;
-    if (
-      typeof data.grade10Active === "string" &&
-      grade10Exercises.some(({ id }) => id === data.grade10Active)
-    )
-      clean.grade10Active = data.grade10Active;
+    const active =
+      typeof data.active === "string" ? findExercise(data.active) : undefined;
+    if (active) clean.active = active.id;
+    const grade10Active =
+      typeof data.grade10Active === "string"
+        ? findExercise(data.grade10Active)
+        : undefined;
+    if (grade10Active && grade10Exercises.includes(grade10Active))
+      clean.grade10Active = grade10Active.id;
     if (record(data.drafts)) {
       for (const [id, draft] of Object.entries(data.drafts)) {
         if (

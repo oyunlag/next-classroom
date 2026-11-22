@@ -913,5 +913,9 @@ export const exercises: PythonExercise[] = [
 
 export const allExercises = [...exercises, ...grade10Exercises];
 
-export const findExercise = (id: string) =>
-  allExercises.find((exercise) => exercise.id === id);
+// Keep old bookmarks and allow existing drafts to be restored under their original key.
+export function findExercise(id: string) {
+  const currentId =
+    id === "g10-temperature-converter" ? "g10-field-trip-distance" : id;
+  return allExercises.find((exercise) => exercise.id === currentId);
+}

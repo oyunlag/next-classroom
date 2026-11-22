@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
-import { allExercises, exercises, modules } from "./course";
+import { allExercises, exercises, findExercise, modules } from "./course";
 import {
   grade10ExerciseGroups,
   grade10Exercises,
@@ -145,6 +145,32 @@ test("restoring Python progress keeps the saved position and completion in both 
   assert.equal(restored.grade10Active, "g10-warm-streak");
   assert.deepEqual(restored.completed, ["battery", "g10-warm-streak"]);
   assert.equal(restored.drafts["g10-warm-streak"].code, "print(2)");
+  assert.equal(
+    restoreProgress(JSON.stringify({ ...restored, active: "g10-warm-streak" }))
+      .active,
+    "g10-warm-streak",
+  );
+});
+
+test("the replaced exercise preserves past work separately and opens its metric replacement", () => {
+  const retiredId = "g10-temperature-converter";
+  const replacementId = "g10-field-trip-distance";
+  const draft = { code: "print(68)", inputs: "20", solutionViewed: false };
+  const restored = restoreProgress(
+    JSON.stringify({
+      ...emptyProgress(),
+      active: retiredId,
+      grade10Active: retiredId,
+      completed: [retiredId],
+      drafts: { [retiredId]: draft },
+    }),
+  );
+  assert.equal(findExercise(retiredId)?.id, replacementId);
+  assert.equal(restored.active, replacementId);
+  assert.equal(restored.grade10Active, replacementId);
+  assert.deepEqual(restored.drafts[retiredId], draft);
+  assert.equal(restored.drafts[replacementId], undefined);
+  assert.deepEqual(restored.completed, [retiredId]);
 });
 
 test("hard-coded output and a wrong boundary cannot pass the battery exercise", () => {

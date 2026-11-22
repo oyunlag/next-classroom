@@ -30,7 +30,7 @@ const courses = {
     file: "hello.py",
     code: 'for i in range(3):\n    print("Би чадна!")',
     output: "Би чадна!\nБи чадна!\nБи чадна!",
-    features: ["28 дасгал", "Мэдлэгийн сорил", "Чөлөөт код"],
+    features: ["Мэдлэгийн сорил", "Чөлөөт код"],
   },
   nextjs: {
     name: "Next.js",
@@ -67,14 +67,15 @@ const courses = {
 export default function CourseEntry({
   course,
   onLogin,
+  features,
   placement,
 }: {
   course: keyof typeof courses;
   onLogin: (id: string) => Promise<unknown>;
+  features?: readonly string[];
   placement?: {
     grade: string;
     backHref: string;
-    features: string[];
   };
 }) {
   const info = courses[course];
@@ -129,7 +130,7 @@ export default function CourseEntry({
             </div>
           </div>
           <ul className="classroom-features">
-            {(placement?.features ?? info.features).map((feature) => (
+            {(features ?? info.features).map((feature) => (
               <li key={feature}>
                 <Check size={15} />
                 {feature}
