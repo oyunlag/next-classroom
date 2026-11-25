@@ -1,10 +1,12 @@
 import { execute } from "@/apps/kodlab/src/runtime";
 import {
+  demoQuestions,
   normalizeGuess,
   rarityLevels,
   type QuizAnswer,
   type QuizGrade,
   type QuizProjectDraft,
+  type QuizQuestion,
   type RarityPoints,
 } from "./quiz-project";
 
@@ -33,6 +35,11 @@ const planets: QuizAnswer[] = [
   { text: "Дэлхий", points: 10 },
   { text: "Буд", points: 30 },
 ];
+
+export function scorePracticeQuestion(grade: QuizGrade): QuizQuestion {
+  const question = demoQuestions[0];
+  return grade === 6 ? { ...question, answers: animals } : question;
+}
 
 export function scoreExamples(grade: QuizGrade): ScoreInput[] {
   const secondBank = grade === 6 ? planets.slice(0, 3) : planets;

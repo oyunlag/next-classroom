@@ -230,13 +230,6 @@
   font-weight: 720;
 }
 
-.rarity {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.rarity span,
 .rarityLabel {
   display: inline-flex;
   gap: 5px;
@@ -249,14 +242,233 @@
   white-space: nowrap;
 }
 
-.rarity span:nth-child(2) {
-  color: #5d3c84;
-  background: #f0eafa;
+.guideIntro,
+.guide ol p {
+  margin-top: 5px;
+  line-height: 1.6;
+  color: var(--muted);
 }
 
-.rarity span:nth-child(3) {
-  color: #12644d;
-  background: #e3f5eb;
+.guideIntro {
+  margin-top: 12px;
+}
+
+.guide h3 {
+  margin: 17px 0 8px;
+  font-size: 15px;
+  font-weight: 720;
+}
+
+.guide ol {
+  margin-block: 8px 15px;
+}
+
+.guide code,
+.practiceResult code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: #eaf1ff;
+  color: #214894;
+  font:
+    630 0.94em var(--font-geist-mono),
+    monospace;
+  overflow-wrap: anywhere;
+  box-decoration-break: clone;
+}
+
+.guide code[data-keyword="true"],
+.practiceResult code[data-keyword="true"] {
+  background: #f0e7fb;
+  color: #663592;
+}
+
+.variables {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f9fbfe;
+  font-size: 13px;
+}
+
+.variables > div {
+  display: grid;
+  grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.55fr);
+  gap: 8px;
+  padding: 8px 9px;
+}
+
+.variables > div + div {
+  border-top: 1px solid var(--line);
+}
+
+.variables dt span {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.variables dd {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.snippetTitle {
+  margin-bottom: 5px;
+  font-size: 13px;
+  font-weight: 670;
+}
+
+.snippet {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f5f8ff;
+  white-space: pre-wrap;
+}
+
+.snippet code {
+  padding: 0;
+  background: transparent;
+}
+
+.practice {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 15px;
+  margin-bottom: 16px;
+  padding: clamp(14px, 2vw, 22px);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: white;
+}
+
+.practice h2 {
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 730;
+  line-height: 1.25;
+}
+
+.practiceControls > p {
+  margin-top: 5px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.practicePicks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-block: 12px;
+}
+
+.practicePicks button {
+  min-height: 36px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--blue);
+  font-weight: 650;
+}
+
+.practicePicks button:hover,
+.practicePicks button[aria-pressed="true"] {
+  background: var(--blue-soft);
+  border-color: #90a8e3;
+}
+
+.practiceForm {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.practiceForm .field {
+  flex: 1 1 155px;
+}
+
+.practiceResult {
+  padding: 14px;
+  border: 1px solid #cfe4d9;
+  border-radius: 10px;
+  background: #f0f8f3;
+  overflow-wrap: anywhere;
+  line-height: 1.65;
+}
+
+.practiceResult > p {
+  margin-top: 6px;
+}
+
+.practiceResult .literal {
+  white-space: break-spaces;
+}
+
+.expectedScore {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #cfe4d9;
+  color: var(--green);
+  font-weight: 700;
+}
+
+.expectedScore strong {
+  font:
+    760 24px/1.2 var(--font-geist-mono),
+    monospace;
+}
+
+.scorePath {
+  font-weight: 640;
+}
+
+.trace {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.trace summary {
+  color: var(--blue);
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.trace ol {
+  display: grid;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.trace li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 10px;
+  padding: 5px 7px;
+  border-radius: 6px;
+  background: #ffffffbb;
+}
+
+.trace li[data-match="true"] {
+  color: var(--green);
+  background: #dff0e6;
+}
+
+.trialResult,
+.trialError {
+  padding-top: 6px;
+  border-top: 1px solid #cfe4d9;
+  color: #922a25;
+  white-space: pre-wrap;
+}
+
+.trialResult[data-passed="true"] {
+  color: var(--green);
 }
 
 .hint {
@@ -764,6 +976,7 @@
 
 @media (max-width: 700px) {
   .workspace,
+  .practice,
   .gameChoices {
     grid-template-columns: minmax(0, 1fr);
   }

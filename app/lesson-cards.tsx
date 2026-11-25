@@ -4,7 +4,7 @@ import { gradeHref, gradePlans } from "@/lib/curriculum";
 import styles from "./page.module.css";
 
 type CardPreview = {
-  theme: "python" | "javascript" | "next" | "web";
+  theme: "python" | "javascript" | "next" | "web" | "project";
   topics: readonly string[];
   file: string;
   code: string;
@@ -18,6 +18,7 @@ export type LessonCardData = CardPreview & {
   description: string;
   outcome: string;
   href: string;
+  action?: string;
   documentLink?: boolean;
 };
 
@@ -28,6 +29,7 @@ export function LessonCard({
   card: LessonCardData;
   heading?: "h2" | "h3";
 }) {
+  const action = card.action ?? "Хичээлд орох";
   const content = (
     <>
       <div className={styles.cardTop}>
@@ -59,14 +61,14 @@ export function LessonCard({
         {card.outcome}
       </p>
       <span className={styles.enter}>
-        Хичээлд орох <ArrowRight size={18} aria-hidden="true" />
+        {action} <ArrowRight size={18} aria-hidden="true" />
       </span>
     </>
   );
   const props = {
     href: card.href,
     className: `${styles.card} ${styles[card.theme]}`,
-    "aria-label": `${card.name} · Хичээлд орох`,
+    "aria-label": `${card.name} · ${action}`,
   };
   return card.documentLink ? (
     <a {...props}>{content}</a>

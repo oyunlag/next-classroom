@@ -16,8 +16,6 @@ import {
   blankQuizProject,
   questionIssue,
   quizGrades,
-  quizLessons,
-  rarityLevels,
   readQuizDraft,
   type QuizGrade,
   type QuizProjectDraft,
@@ -31,6 +29,8 @@ import {
 } from "@/lib/curriculum/quiz-project-code";
 import QuestionEditor from "./QuestionEditor";
 import QuizGame from "./QuizGame";
+import QuizInstructions from "./QuizInstructions";
+import ScorePlayground from "./ScorePlayground";
 import styles from "./project.module.css";
 
 const steps = [
@@ -74,7 +74,6 @@ export default function QuizProject({ grade }: { grade: QuizGrade }) {
   const [check, setCheck] = useState<CodeCheck>({ kind: "idle" });
   const checkSequence = useRef(0);
   const stepHeading = useRef<HTMLDivElement>(null);
-  const lesson = quizLessons[grade];
   const readyQuestions = draft.questions.filter(
     (question) => !questionIssue(question),
   ).length;
@@ -120,7 +119,12 @@ export default function QuizProject({ grade }: { grade: QuizGrade }) {
     <div className={styles.page}>
       <header className={styles.header}>
         <div className={styles.headerInner}>
-          <Link href="/" className="classroom-wordmark" prefetch={false}>
+          <Link
+            href="/"
+            className="classroom-wordmark"
+            aria-label="Oyunlag code · Нүүр хуудас"
+            prefetch={false}
+          >
             <span className="classroom-logo">
               <Code2 size={22} aria-hidden="true" />
             </span>
@@ -178,67 +182,55 @@ export default function QuizProject({ grade }: { grade: QuizGrade }) {
           </button>
         </div>
         {step === "code" && (
-          <div className={styles.workspace}>
-            <section className={styles.notes} aria-labelledby="code-heading">
-              <h2 id="code-heading">Оноо бодох</h2>
-              <p className={styles.muted}>{lesson.topics}</p>
-              <ol>
-                {lesson.steps.map((instruction) => (
-                  <li key={instruction}>{instruction}</li>
-                ))}
-              </ol>
-              <div className={styles.rarity} aria-label="Онооны дүрэм">
-                {rarityLevels.map(({ points, label }) => (
-                  <span key={points}>
-                    <b>{points}</b> {label}
-                  </span>
-                ))}
-              </div>
-              <details className={styles.hint}>
-                <summary>Санамж</summary>
-                <p>{lesson.hint}</p>
-              </details>
-              <a className={styles.reviewLink} href={lesson.review.href}>
-                {lesson.review.label}{" "}
-                <ArrowRight size={14} aria-hidden="true" />
-              </a>
-            </section>
-            <section className={styles.editor} aria-labelledby="file-heading">
-              <div className={styles.editorTitle}>
-                <h2 id="file-heading">
-                  <Code2 size={16} aria-hidden="true" /> answer.js
-                </h2>
-                <span>JavaScript</span>
-              </div>
-              <WebEditor
-                file="answer.js"
-                code={draft.code}
-                onChange={editCode}
-                onRun={() => void checkCode()}
-              />
-              <div className={styles.editorActions}>
-                <button
-                  className={styles.primary}
-                  type="button"
-                  onClick={() => void checkCode()}
-                  disabled={check.kind === "running"}
-                >
-                  <Play size={16} aria-hidden="true" />{" "}
-                  {check.kind === "running" ? "Шалгаж байна…" : "Кодоо шалгах"}
-                </button>
-                {codeReady && (
+          <>
+            <ScorePlayground grade={grade} code={draft.code} />
+            <div className={styles.workspace}>
+              <QuizInstructions grade={grade} />
+              <section
+                id="answer-code"
+                className={styles.editor}
+                aria-labelledby="file-heading"
+                tabIndex={-1}
+              >
+                <div className={styles.editorTitle}>
+                  <h2 id="file-heading">
+                    <Code2 size={16} aria-hidden="true" /> answer.js
+                  </h2>
+                  <span>JavaScript</span>
+                </div>
+                <WebEditor
+                  file="answer.js"
+                  code={draft.code}
+                  onChange={editCode}
+                  onRun={() => void checkCode()}
+                />
+                <div className={styles.editorActions}>
                   <button
+                    className={styles.primary}
                     type="button"
-                    className={styles.secondary}
-                    onClick={() => goTo("questions")}
+                    onClick={() => void checkCode()}
+                    disabled={check.kind === "running"}
                   >
-                    Асуултаа зохиох <ArrowRight size={16} aria-hidden="true" />
+                    <Play size={16} aria-hidden="true" />{" "}
+                    {check.kind === "running"
+                      ? "Шалгаж байна…"
+                      : "Кодоо шалгах"}
                   </button>
-                )}
-              </div>
-              <CheckFeedback check={check} />
-            </section>
-          </div>
+                  {codeReady && (
+                    <button
+                      type="button"
+                      className={styles.secondary}
+                      onClick={() => goTo("questions")}
+                    >
+                      Асуултаа зохиох{" "}
+                      <ArrowRight size={16} aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
+                <CheckFeedback check={check} />
+              </section>
+            </div>
+          </>
         )}
         {step === "questions" && (
           <QuestionEditor

@@ -129,16 +129,6 @@
   font-size: 13px;
   font-weight: 650;
 }
-.projectLink {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  min-height: 36px;
-  color: var(--lab-blue);
-}
-.projectLink:hover {
-  text-decoration: underline;
-}
 .lessons,
 .gradeCards {
   display: grid;
@@ -189,6 +179,10 @@
   --accent: #12634d;
   --soft: #e6f3eb;
 }
+.project {
+  --accent: #673b8d;
+  --soft: #f2ebfa;
+}
 .cardTop {
   display: flex;
   align-items: center;
@@ -198,6 +192,7 @@
 .lessonMark {
   width: 46px;
   height: 46px;
+  flex-shrink: 0;
   border-radius: 12px;
   background: var(--soft);
   color: var(--accent);
@@ -360,6 +355,15 @@
   gap: 20px;
   font-size: 10px;
   color: #697d98;
+}
+@media (min-width: 1200px) {
+  .lessons {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 16px;
+  }
+  .lessons > .card {
+    padding: 17px;
+  }
 }
 @media (max-width: 1000px) {
   .intro {

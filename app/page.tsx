@@ -52,6 +52,20 @@ const lessons: LessonCardData[] = [
     theme: "javascript",
   },
   {
+    name: "Ховор хариулт",
+    mark: "?",
+    grade: "6, 7, 8-р анги",
+    count: "JavaScript төсөл",
+    description: "Ховор зөв хариултад илүү оноо өгдөг тоглоом бүтээгээрэй.",
+    topics: ["if / else", "Давталт", "Функц"],
+    code: "if (guess === rare) {\n  points = 30;\n}",
+    file: "answer.js",
+    outcome: "Онооны кодоо бичээд, өөрийн зохиосон асуултаар тоглоно.",
+    href: "/quiz-project",
+    theme: "project",
+    action: "Төсөл эхлэх",
+  },
+  {
     name: "Next.js",
     mark: "N",
     grade: "Веб хөгжүүлэлт",
@@ -71,14 +85,19 @@ export default function Home() {
     <div className={styles.page}>
       <LegacyPythonLink />
       <header className={styles.header}>
-        <span className="classroom-wordmark">
+        <Link
+          href="/"
+          className="classroom-wordmark"
+          aria-label="Oyunlag code · Нүүр хуудас"
+          prefetch={false}
+        >
           <span className="classroom-logo">
             <Code2 size={23} aria-hidden="true" />
           </span>
           <span>
             Oyunlag <span>code</span>
           </span>
-        </span>
+        </Link>
         <span className={styles.headerNote}>
           <Monitor size={16} aria-hidden="true" /> Таны код бичих орон зай
         </span>
@@ -121,14 +140,6 @@ export default function Home() {
           </div>
           <div className={styles.cardGroupHeading}>
             <p>Код бичих дадлага</p>
-            <Link
-              className={styles.projectLink}
-              href="/quiz-project"
-              prefetch={false}
-            >
-              Ховор хариулт · JavaScript төсөл{" "}
-              <ArrowRight size={15} aria-hidden="true" />
-            </Link>
           </div>
           <nav className={styles.lessons} aria-label="Код бичих дадлага">
             {lessons.map((lesson) => (
