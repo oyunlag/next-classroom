@@ -1,5 +1,13 @@
 "use client";
-import { ChevronRight, Trash2 } from "lucide-react";
+import { FileCode2, MoreHorizontal, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { Group, StudentRow } from "@/lib/admin/types";
 import { courses } from "@/lib/student/identity";
 import { courseLabels, dateLabel } from "./api";
@@ -89,23 +97,32 @@ export default function StudentTableRow({
       })}
       <td className="admin-date">{dateLabel(student.updatedAt)}</td>
       <td className="admin-row-actions">
-        <button
-          className="admin-icon"
-          onClick={onOpen}
-          aria-label={`${student.id} сурагчийн дэлгэрэнгүй`}
-          title="Хадгалсан ажил харах"
-        >
-          <ChevronRight size={18} />
-        </button>
-        <button
-          className="admin-icon admin-delete"
-          onClick={onDelete}
-          disabled={disabled}
-          aria-label={`${student.id} сурагчийг устгах`}
-          title="Сурагч устгах"
-        >
-          <Trash2 size={16} />
-        </button>
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="admin-row-menu"
+              aria-label={`${student.id} сурагчийн үйлдлүүд`}
+            >
+              <MoreHorizontal />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="admin-row-menu-content">
+            <DropdownMenuItem onSelect={onOpen}>
+              <FileCode2 /> Хадгалсан ажил харах
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={onDelete}
+              disabled={disabled}
+              variant="destructive"
+            >
+              <Trash2 /> Сурагч устгах
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </td>
     </tr>
   );

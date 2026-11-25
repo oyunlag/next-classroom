@@ -11,6 +11,7 @@ export type ProgressRequest = {
   course: Course;
 } & (
   | { action: "load" }
+  | { action: "guidance" }
   | { action: "save"; revision: number; progress: ProgressSnapshot }
 );
 
@@ -28,7 +29,8 @@ export function parseProgressRequest(
   const course = courses.find((course) => course === input.course);
   if (!course) throw new Error("Invalid course");
   const studentId = normalizeStudentId(input.studentId);
-  if (input.action === "load") return { action: "load", course, studentId };
+  if (input.action === "load" || input.action === "guidance")
+    return { action: input.action, course, studentId };
   if (
     input.action !== "save" ||
     typeof input.revision !== "number" ||

@@ -7,6 +7,7 @@ import {
 } from "@/lib/admin/auth";
 import AdminLogin from "@/components/admin/AdminLogin";
 import AdminDashboard from "@/components/admin/AdminDashboard";
+import { canViewSchoolDirectory } from "@/lib/admin/school-directory";
 import "./admin.css";
 export const metadata: Metadata = {
   title: "КодЛаб · Багшийн орчин",
@@ -17,7 +18,10 @@ export default async function AdminPage() {
   const token = (await cookies()).get(ADMIN_COOKIE)?.value;
   const identity = await getAdminIdentity(token);
   return identity ? (
-    <AdminDashboard identity={identity} />
+    <AdminDashboard
+      identity={identity}
+      schoolDirectoryAccess={canViewSchoolDirectory(identity.id)}
+    />
   ) : (
     <AdminLogin configured={await adminConfigured()} />
   );

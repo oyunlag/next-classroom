@@ -1,5 +1,8 @@
 "use client";
 
+import TeacherGuidance from "@/components/student/TeacherGuidance";
+import ProgressSaveButton from "@/components/student/ProgressSaveButton";
+
 import {
   ArrowLeft,
   ArrowRight,
@@ -43,6 +46,7 @@ import {
   getServerState,
   getState,
   logout,
+  savePythonProgress,
   subscribe,
   updateProgress,
 } from "@/lib/python/state";
@@ -438,6 +442,10 @@ export default function PythonLab({
           </button>
         </div>
       </header>
+      <div className="classroom-save-actions">
+        <ProgressSaveButton onSave={savePythonProgress} />
+      </div>
+      <TeacherGuidance studentId={state.student} course="python" />
       <div
         role="status"
         className="py-storage-warning"
@@ -785,7 +793,14 @@ export default function PythonLab({
         </Dialog>
       )}
       {dialog === "progress" && (
-        <Dialog title="Миний ахиц" onClose={() => setDialog(null)}>
+        <Dialog
+          title={
+            grade10Practice
+              ? "Миний ахиц · 10-р ангийн дадлага"
+              : "Миний ахиц · Python бүх дасгал"
+          }
+          onClose={() => setDialog(null)}
+        >
           <div className="py-progress-overview">
             <div
               className="py-progress-circle"

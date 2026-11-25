@@ -20,6 +20,7 @@ const cloud = createCloudProgress("nextjs", (status) => {
   listeners.forEach((listener) => listener());
 });
 export const recoverCloudProgress = () => cloud.recover();
+export const saveCourseProgress = () => cloud.saveNow();
 export const getCloudVersion = () => statusVersion;
 export const getCloudStatus = () => cloudStatus;
 const studentKey = () => `${STORAGE_KEY}:${studentId}`;
@@ -118,6 +119,7 @@ export function subscribeProgress(listener: () => void) {
 }
 export function updateProgress(updater: (current: Progress) => Progress) {
   if (!studentId) return;
+  const previousCompleted = snapshot.completed.length;
   snapshot = updater(getProgress());
   try {
     localStorage.setItem(studentKey(), JSON.stringify(snapshot));
@@ -126,6 +128,7 @@ export function updateProgress(updater: (current: Progress) => Progress) {
     savingAvailable = false;
   }
   cloud.save(snapshot);
+  if (snapshot.completed.length > previousCompleted) void cloud.saveNow();
   listeners.forEach((listener) => listener());
 }
 export function getDraft(progress: Progress, exercise: Exercise): Draft {

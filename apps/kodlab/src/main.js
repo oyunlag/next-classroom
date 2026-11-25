@@ -2,17 +2,21 @@ import {EditorView,basicSetup} from 'codemirror';
 import {keymap} from '@codemirror/view';
 import {javascript} from '@codemirror/lang-javascript';
 import {createIcons,Code2,Play,Check,CheckCheck,ChevronDown,ChevronRight,ChevronLeft,ArrowRight,ArrowLeft,Lightbulb,RotateCcw,Terminal,BookOpen,ClipboardCheck,FlaskConical,BarChart3,Menu,X,Download,CheckCircle2,Clock,AlertCircle,ExternalLink,Trash2,Send,Flag,Square,HelpCircle,Trophy} from 'lucide';
-import {courseGradeLabel,topics,exercises,quizzes,questions} from './content.js';
-import {state,save,storageAvailable,studentId,selectCloudStudent,signOutStudent,cloudStatus,recoverCloudProgress} from './store.js';
+import {courseGradeLabel,topics,exercises,quizzes,questions,playgroundStarter} from './content.js';
+import {state,save,storageAvailable,studentId,selectCloudStudent,signOutStudent,cloudStatus,recoverCloudProgress,saveCloudProgress} from './store.js';
 import {inspect,withInputs,checkStructure,sameOutput,scoreQuiz,errorText} from './engine.js';
 import {execute,cancelRuns} from './runtime.js';
 import {enterLesson} from '../../../lib/student/entry.ts';
 import {MAX_TEACHER_NAME_LENGTH} from '../../../lib/student/identity.ts';
+import {showGuidance,watchGuidance} from '../../../lib/student/guidance.ts';
 import './style.css';
 import '../../../app/classroom.css';
 import './classroom.css';
 const icons={Code2,Play,Check,CheckCheck,ChevronDown,ChevronRight,ChevronLeft,ArrowRight,ArrowLeft,Lightbulb,RotateCcw,Terminal,BookOpen,ClipboardCheck,FlaskConical,BarChart3,Menu,X,Download,CheckCircle2,Clock,AlertCircle,ExternalLink,Trash2,Send,Flag,Square,HelpCircle,Trophy};
 const app=document.querySelector('#app');
+const guidance=document.createElement('div');
+guidance.className='classroom-guidance-host';
+let stopGuidance;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const icon=name=>`<i data-lucide="${name}" aria-hidden="true"></i>`;
 const topic=id=>topics.find(t=>t.id===id);
@@ -29,9 +33,19 @@ function workspace(){const free=section==='play';const index=exercises.indexOf(a
 function sampleInputs(e){return Object.keys(e.tests[0].vars).length?Object.entries(e.tests[0].vars).map(([k,v])=>`let ${k} = ${JSON.stringify(v)};`).join('\n'):e.starter.split('\n').filter(l=>l.startsWith('let ')).join('\n');}
 function render(){
  cancelRuns();sequence++;busy=false;editor?.destroy();editor=null;
- if(!studentId){renderStudentGate();return;}
+ if(!studentId){
+  stopGuidance?.();stopGuidance=undefined;guidance.replaceChildren();
+  renderStudentGate();return;
+ }
  app.innerHTML=header()+`<div class="app-body">${sidebar()}${section==='tests'?testsPage():workspace()}</div><dialog id="modal"></dialog><div id="toast" role="status"></div>`;
  app.querySelector('.topnav').insertAdjacentHTML('beforeend',`<a class="nav-tab" href="/quiz-project" aria-label="Ховор хариулт · JavaScript төсөл">${icon('trophy')}<span>Төсөл</span></a>`);
+ const saveActions=document.createElement('div');
+ saveActions.className='classroom-save-actions';
+ saveActions.innerHTML='<span id="progress-save-status" role="status"></span><button class="classroom-save-button" type="button" data-action="save-progress">Ахиц хадгалах</button>';
+ saveActions.querySelector('span').textContent=cloudStatus;
+ app.querySelector('.app-body main')?.prepend(saveActions);
+ app.querySelector('.app-body main')?.prepend(guidance);
+ stopGuidance??=watchGuidance(studentId,'javascript',entries=>showGuidance(guidance,entries));
  if(section!=='tests'){
   editor=new EditorView({doc:section==='play'?state.play:state.drafts[active.id]??active.starter,parent:document.querySelector('#editor'),extensions:[basicSetup,javascript(),EditorView.lineWrapping,EditorView.contentAttributes.of({'aria-label':'JavaScript код бичих талбар','spellcheck':'false'}),keymap.of([{key:'Mod-Enter',run:()=>{run(false);return true;}}]),EditorView.updateListener.of(update=>{
    if(!update.docChanged)return;sequence++;cancelRuns();setBusy(false);checks=[];
@@ -65,7 +79,13 @@ async function run(check){
     const lines=r.logs.map(l=>l.text);if(i===0){output=r.logs;runError=r.error||'';}
     checks.push({label:`Туршилт ${i+1}${i===0?' · жишээ өгөгдөл':''}`,passed:!r.error&&sameOutput(lines,t.output),input:Object.entries(t.vars).map(([k,v])=>`${k} = ${JSON.stringify(v)}`).join('\n')||'Анхны код',expected:t.output.join('\n'),actual:r.error||lines.join('\n')});renderOutput();
    }
-   if(checks.every(c=>c.passed)&&!state.assisted.includes(ex.id)){state.completed=[...new Set([...state.completed,ex.id])];persist();updateProgressUI();document.querySelector('#exercise-status').innerHTML=icon('check-circle-2')+'Бие даан бодсон';toast('Дасгал амжилттай! Дараагийн дасгалдаа ороорой.');decorate();}
+   if(checks.every(c=>c.passed)&&!state.assisted.includes(ex.id)){
+    const newlyCompleted=!state.completed.includes(ex.id);
+    if(newlyCompleted)state.completed.push(ex.id);
+    persist();
+    if(newlyCompleted)void saveCloudProgress();
+    updateProgressUI();document.querySelector('#exercise-status').innerHTML=icon('check-circle-2')+'Бие даан бодсон';toast('Дасгал амжилттай! Дараагийн дасгалдаа ороорой.');decorate();
+   }
   }
  }catch(error){if(token!==sequence)return;runError=errorText(error);consoleTab='console';renderOutput();}
  finally{if(token===sequence)setBusy(false);}
@@ -80,7 +100,7 @@ function shuffle(list){const a=[...list];for(let i=a.length-1;i>0;i--){const j=M
 function startQuiz(id){const q=quizzes.find(q=>q.id===id);state.attempt={quiz:id,ids:shuffle(questions.filter(x=>q.topics.includes(x.topic))).map(x=>x.id),answers:{},index:0,started:Date.now()};quizResult=null;persist();render();}
 function attemptPage(){const a=state.attempt;const q=questions.find(q=>q.id===a.ids[a.index]);const quiz=quizzes.find(q=>q.id===a.quiz);const answered=Object.keys(a.answers).length;return `<main class="tests-workspace attempt"><div class="quiz-topline"><div><div class="breadcrumb">${quiz.title}</div><h1>Асуулт ${a.index+1}<span> / ${a.ids.length}</span></h1></div><button class="text-button" data-action="leave-quiz">Сорилыг зогсоох${icon('x')}</button></div><div class="quiz-progress"><div class="progress-track"><span style="width:${answered/a.ids.length*100}%"></span></div><span>${answered}/${a.ids.length} хариулсан</span></div><div class="quiz-layout"><section class="question-card"><span class="tag blue">${topic(q.topic).title}</span><h2>${q.prompt}</h2>${q.code?`<pre class="question-code">${esc(q.code)}</pre>`:''}<fieldset class="answer-options"><legend class="sr-only">Нэг хариулт сонгоно уу</legend>${q.options.map((option,i)=>`<label class="answer-option ${a.answers[q.id]===i?'chosen':''}"><input type="radio" name="quiz-answer" value="${i}" data-question="${q.id}" ${a.answers[q.id]===i?'checked':''}><span class="option-letter">${'ABCD'[i]}</span><span>${esc(option)}</span>${a.answers[q.id]===i?icon('check'):''}</label>`).join('')}</fieldset><div class="question-navigation"><button class="button secondary" data-action="quiz-prev" ${a.index===0?'disabled':''}>${icon('arrow-left')}Өмнөх</button>${a.index<a.ids.length-1?`<button class="button primary" data-action="quiz-next">Дараах${icon('arrow-right')}</button>`:`<button class="button primary" data-action="submit-quiz">${icon('send')}Сорил дуусгах</button>`}</div></section><aside class="question-map"><h3>Асуултууд</h3><div class="question-dots">${a.ids.map((id,i)=>`<button data-action="quiz-jump" data-id="${i}" class="${a.index===i?'current':''} ${a.answers[id]!==undefined?'answered':''}" aria-label="${i+1}-р асуулт${a.answers[id]!==undefined?', хариулсан':''}" ${a.index===i?'aria-current="step"':''}>${i+1}</button>`).join('')}</div><div class="map-key"><span><i class="blue-dot"></i>Хариулсан</span><span><i class="empty-dot"></i>Хариулаагүй</span></div><p>Хариугаа дуусгахаас өмнө өөрчилж болно. Сорил автоматаар хадгалагдана.</p><button class="button secondary full" data-action="submit-quiz">Сорил дуусгах</button></aside></div></main>`;}
 function submitQuiz(){const a=state.attempt;const missing=a.ids.length-Object.keys(a.answers).length;if(missing){dialog('Хариулаагүй асуулт байна',`<p>${missing} асуултад хариулаагүй байна. Хариулаагүй асуулт 0 оноотой тооцогдоно.</p>`,`<button class="button secondary" data-action="close">Буцаж хариулах</button><button class="button primary" data-action="confirm-submit">Дуусгах</button>`);}else finishQuiz();}
-function finishQuiz(){const a=state.attempt;const list=a.ids.map(id=>questions.find(q=>q.id===id));const score=scoreQuiz(list,a.answers);const q=quizzes.find(q=>q.id===a.quiz);quizResult={...a,...score,title:q.title,date:new Date().toISOString(),elapsed:Math.round((Date.now()-a.started)/60000)};const percent=Math.round(score.correct/score.total*100);state.best[a.quiz]=Math.max(state.best[a.quiz]||0,percent);state.history.unshift(quizResult);state.history=state.history.slice(0,30);state.attempt=null;persist();render();window.scrollTo({top:0});}
+function finishQuiz(){const a=state.attempt;const list=a.ids.map(id=>questions.find(q=>q.id===id));const score=scoreQuiz(list,a.answers);const q=quizzes.find(q=>q.id===a.quiz);quizResult={...a,...score,title:q.title,date:new Date().toISOString(),elapsed:Math.round((Date.now()-a.started)/60000)};const percent=Math.round(score.correct/score.total*100);state.best[a.quiz]=Math.max(state.best[a.quiz]||0,percent);state.history.unshift(quizResult);state.history=state.history.slice(0,30);state.attempt=null;persist();void saveCloudProgress();render();window.scrollTo({top:0});}
 function resultPage(){const r=quizResult;const list=r.ids.map(id=>questions.find(q=>q.id===id));const percent=Math.round(r.correct/r.total*100);const covered=[...new Set(list.map(q=>q.topic))];return `<main class="tests-workspace"><div class="breadcrumb">СОРИЛЫН ҮР ДҮН</div><div class="result-header"><div><h1>${r.title}</h1><p class="page-description">${percent>=80?'Сайн байна! Мэдлэгээ код бичиж бататгаарай.':'Тайлбаруудыг уншаад, алдсан сэдвээ дахин давтаарай.'}</p></div><div class="score-ring" style="--score:${percent}%"><span><strong>${percent}%</strong><small>${r.correct}/${r.total} зөв</small></span></div></div><div class="result-actions"><button class="button primary" data-action="retry-quiz" data-id="${r.quiz}">${icon('rotate-ccw')}Дахин сорих</button><button class="button secondary" data-action="quiz-home">Бүх сорил</button><button class="text-button" data-action="export-quiz">${icon('download')}Үр дүн татах</button></div><div class="topic-results">${covered.map(id=>{const subset=list.filter(q=>q.topic===id);const correct=subset.filter(q=>r.answers[q.id]===q.answer).length;return `<a href="#/exercises/${exercises.find(e=>e.topic===id).id}" class="topic-result"><span>${topic(id).title}</span><strong>${correct}/${subset.length}</strong><small>${correct===subset.length?'Дасгалаар бататгах':'Энэ сэдвийг давтах'} ${icon('arrow-right')}</small></a>`}).join('')}</div><div class="section-heading"><h2>Хариу ба тайлбар</h2><span>Асуулт бүрээ нягтлаарай</span></div><div class="review-list">${list.map((q,i)=>{const correct=r.answers[q.id]===q.answer;return `<details class="review-item ${correct?'correct':'incorrect'}" ${!correct?'open':''}><summary><span class="review-number">${i+1}</span><strong>${q.prompt}</strong><span>${correct?'Зөв':'Буруу'} ${icon(correct?'check-circle-2':'alert-circle')}</span></summary><div class="review-body">${q.code?`<pre>${esc(q.code)}</pre>`:''}<p>Таны хариу: <strong>${r.answers[q.id]===undefined?'Хариулаагүй':esc(q.options[r.answers[q.id]])}</strong></p><p>Зөв хариу: <strong>${esc(q.options[q.answer])}</strong></p><div class="explanation">${icon('lightbulb')}<p>${q.explanation}</p></div></div></details>`}).join('')}</div></main>`;}
 function report(){return `КодЛаб · JavaScript — Сурагчийн тайлан\nСурагчийн ID: ${studentId}\nНэр: ${document.querySelector('#student-name')?.value.trim()||'Бичээгүй'}\nОгноо: ${new Date().toLocaleString('mn-MN')}\n\nБие даан бодсон: ${state.completed.length}/${exercises.length}\n\n${exercises.map(e=>`${state.completed.includes(e.id)?'✓':state.assisted.includes(e.id)?'Жишээ үзсэн':'Бодоогүй'} — ${e.title}`).join('\n')}\n\nСорилын үр дүн\n${state.history.map(h=>`${new Date(h.date).toLocaleString('mn-MN')} — ${h.title}: ${h.correct}/${h.total}`).join('\n')||'Сорил өгөөгүй'}\n\nАхиц нь сурагчийн өөрийн үнэлгээ болно.\n`;}
 app.addEventListener('change',e=>{if(e.target.matches('[data-question]')){state.attempt.answers[e.target.dataset.question]=Number(e.target.value);persist();render();document.querySelector(`input[value="${e.target.value}"]`)?.focus();}});
@@ -88,6 +108,11 @@ app.addEventListener('click',e=>{
  const b=e.target.closest('[data-action]');if(!b)return;const a=b.dataset.action,id=b.dataset.id;
  if(a==='switch-student'){signOutStudent();quizResult=null;clearTimeout(toastTimer);output=[];runError='';checks=[];hint=0;mobileOpen=false;history.replaceState(null,'',location.pathname+location.search);render();return;}
  if(!studentId)return;
+ if(a==='save-progress'){
+  b.disabled=true;b.textContent='Хадгалж байна…';
+  void saveCloudProgress().finally(()=>{b.disabled=false;b.textContent='Ахиц хадгалах';});
+  return;
+ }
  if(a==='menu'){mobileOpen=!mobileOpen;document.querySelector('.sidebar').classList.toggle('open',mobileOpen);return;}
  if(a==='topic'){expanded=expanded===id?null:id;const old=document.querySelector('.sidebar');old.outerHTML=sidebar();decorate();return;}
  if(a==='run')run(false);if(a==='check')run(true);
@@ -98,7 +123,7 @@ app.addEventListener('click',e=>{
  if(a==='lesson')reference(true);if(a==='reference')reference(false);if(a==='progress')progress();
  if(a==='close')document.querySelector('#modal').close();
  if(a==='reset')reset();
- if(a==='confirm-reset'){if(section==='play')state.play='let name = "Билгүүн";\nconsole.log("Сайн уу, " + name + "!");';else{delete state.drafts[active.id];state.completed=state.completed.filter(x=>x!==active.id);state.assisted=state.assisted.filter(x=>x!==active.id);}output=[];runError='';checks=[];hint=0;persist();render();}
+ if(a==='confirm-reset'){if(section==='play')state.play=playgroundStarter;else{delete state.drafts[active.id];state.completed=state.completed.filter(x=>x!==active.id);state.assisted=state.assisted.filter(x=>x!==active.id);}output=[];runError='';checks=[];hint=0;persist();render();}
  if(a==='solution')dialog('Жишээ хариу харах',`<p>Эхлээд өөрөө бодож, санамжийг ашиглахыг зөвлөе. Жишээ хариу үзсэн дасгал «бие даан бодсон» ахицад тооцогдохгүй.</p>`,`<button class="button secondary" data-action="close">Өөрөө бодъё</button><button class="button primary" data-action="show-solution">Жишээ хариу үзэх</button>`);
  if(a==='show-solution'){state.assisted=[...new Set([...state.assisted,active.id])];state.completed=state.completed.filter(x=>x!==active.id);persist();updateProgressUI();document.querySelector('#exercise-status').textContent='Жишээ хариу үзсэн · дахин бие даан туршаарай';dialog('Жишээ хариу',`<pre>${esc(active.solution)}</pre><p class="muted">Кодоо өөрийнхөөрөө бичээрэй. Бие даан бодохын тулд «Эхнээс нь эхлэх» товч ашигла.</p>`);}
  if(a==='download-code')download(code(),section==='play'?'playground.js':active.id+'.js','text/javascript');
@@ -150,6 +175,6 @@ app.addEventListener('submit',async e=>{
 window.addEventListener('hashchange',route);route();
 window.addEventListener('pageshow',event=>{if(event.persisted&&studentId){signOutStudent();quizResult=null;render();}});
 
-window.addEventListener('kodlab-cloud',()=>{let el=document.querySelector('#cloud-status');if(!el){el=document.createElement('p');el.id='cloud-status';el.setAttribute('role','status');el.className='classroom-cloud-status';document.body.append(el);}el.hidden=!studentId;el.dataset.attention=String(/хадгалаагүй|боломжгүй|Өөр цонхонд/.test(cloudStatus));el.textContent=cloudStatus;if(cloudStatus.includes('Өөр цонхонд')){const button=document.createElement('button');button.textContent='Ажлаа татаж, серверийн ахицыг ачаалах';button.addEventListener('click',recoverCloudProgress);el.append(button);}document.querySelector('#save-status')?.replaceChildren(document.createTextNode(cloudStatus));});
+window.addEventListener('kodlab-cloud',()=>{let el=document.querySelector('#cloud-status');if(!el){el=document.createElement('p');el.id='cloud-status';el.setAttribute('role','status');el.className='classroom-cloud-status';document.body.append(el);}const attention=/хадгалаагүй|боломжгүй|Өөр цонхонд/.test(cloudStatus);el.hidden=!studentId||!attention;el.dataset.attention=String(attention);el.textContent=cloudStatus;if(cloudStatus.includes('Өөр цонхонд')){const button=document.createElement('button');button.textContent='Ажлаа татаж, серверийн ахицыг ачаалах';button.addEventListener('click',recoverCloudProgress);el.append(button);}document.querySelector('#save-status')?.replaceChildren(document.createTextNode(cloudStatus));document.querySelector('#progress-save-status')?.replaceChildren(document.createTextNode(cloudStatus));});
 
 app.addEventListener('input',event=>{if(event.target.id==='student-id'){event.target.removeAttribute('aria-invalid');document.querySelector('#student-id-error').textContent='';}});

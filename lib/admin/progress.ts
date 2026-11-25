@@ -2,12 +2,20 @@ import {
   allExercises as pythonExercises,
   modules as pythonModules,
 } from "../python/course";
+import { isDeepStrictEqual } from "node:util";
+import { emptyProgress } from "../python/storage";
 import { questions as pythonQuestions } from "../python/questions";
 import { exercises as nextExercises } from "../course/lessons";
-import { exercises as jsExercises } from "../../apps/kodlab/src/content.js";
+import {
+  exercises as jsExercises,
+  playgroundStarter,
+} from "../../apps/kodlab/src/content.js";
 import type { Course } from "../student/identity";
 import { exercises as webExercises } from "../web-lab/lessons";
-import { readProgress as readWebProgress } from "../web-lab/progress";
+import {
+  readProgress as readWebProgress,
+  starterFiles,
+} from "../web-lab/progress";
 import type { CourseSummary, StudentDetail } from "./types";
 
 export const catalog: Record<Course, { id: string; title: string }[]> = {
@@ -106,6 +114,105 @@ export function summarize(course: Course, value: unknown): CourseSummary {
     active: catalog[course].find((e) => e.id === data.active)?.title || "",
     quizzes,
   };
+}
+
+const pythonPlayground = emptyProgress().playground;
+const exercisesByCourse = {
+  python: new Map(pythonExercises.map((e) => [e.id, e])),
+  javascript: new Map(jsExercises.map((e) => [e.id, e])),
+  nextjs: new Map(nextExercises.map((e) => [e.id, e])),
+  htmlcss: new Map(webExercises.map((e) => [String(e.id), e])),
+};
+
+function fileChanges(value: unknown, starters: Record<string, string>) {
+  return Object.fromEntries(
+    Object.entries(object(value)).filter(
+      ([key, item]) =>
+        typeof item === "string" &&
+        Object.hasOwn(starters, key) &&
+        item !== starters[key],
+    ),
+  );
+}
+
+function savedWork(course: Course, value: unknown) {
+  const { data, drafts, completed, assisted } = states(course, value);
+  const edits = Object.entries(drafts).flatMap<[string, unknown]>(
+    ([id, value]) => {
+      const d = object(value);
+      if (course === "javascript") {
+        const exercise = exercisesByCourse.javascript.get(id);
+        return exercise &&
+          typeof value === "string" &&
+          value !== exercise.starter
+          ? [[id, value]]
+          : [];
+      }
+      if (course === "python") {
+        const exercise = exercisesByCourse.python.get(id);
+        if (!exercise || typeof d.code !== "string") return [];
+        const inputs = text(d.inputs);
+        return d.code !== exercise.starter ||
+          inputs !== (exercise.inputs?.join("\n") ?? "")
+          ? [[id, { code: d.code, inputs }]]
+          : [];
+      }
+      const exercise = exercisesByCourse[course].get(id);
+      if (!exercise) return [];
+      const files = fileChanges(d.files, exercise.starter);
+      const answers = Object.fromEntries(
+        Object.entries(object(d.answers)).filter(
+          ([, item]) => typeof item === "string" && item !== "",
+        ),
+      );
+      return Object.keys(files).length || Object.keys(answers).length
+        ? [[id, { files, answers }]]
+        : [];
+    },
+  );
+  const quizAttempts = Object.fromEntries(
+    Object.entries(object(data.quizAttempts)).flatMap(([id, value]) => {
+      const attempt = object(value);
+      const answers = object(attempt.answers);
+      const submitted = attempt.submitted === true;
+      return submitted || Object.keys(answers).length
+        ? [[id, { answers, submitted }]]
+        : [];
+    }),
+  );
+  const playground = object(data.playground);
+  const javascriptAnswers = object(object(data.attempt).answers);
+  return {
+    completed,
+    assisted,
+    edits: Object.fromEntries(edits),
+    quiz:
+      course === "python"
+        ? quizAttempts
+        : course === "javascript"
+          ? {
+              answers: javascriptAnswers,
+              history: Array.isArray(data.history) ? data.history : [],
+            }
+          : null,
+    playground:
+      course === "python"
+        ? fileChanges(playground, pythonPlayground)
+        : course === "htmlcss"
+          ? fileChanges(playground, starterFiles)
+          : course === "javascript" &&
+              typeof data.play === "string" &&
+              data.play !== playgroundStarter
+            ? data.play
+            : null,
+  };
+}
+
+export function hasWorkChange(course: Course, before: unknown, after: unknown) {
+  return !isDeepStrictEqual(
+    savedWork(course, before),
+    savedWork(course, after),
+  );
 }
 export function detail(
   course: Course,

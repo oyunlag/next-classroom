@@ -1,4 +1,5 @@
 import { MongoClient } from "mongodb";
+import type { DailyWork } from "./classroom";
 
 export type ProgressDocument = {
   _id: string;
@@ -9,7 +10,9 @@ export type ProgressDocument = {
   updatedAt: Date;
   adminSummaryRevision?: number;
   adminSummary?: import("../admin/types").CourseSummary;
+  classroomDays?: Record<string, DailyWork<Date>>;
 };
+type CourseEntryDocument = { _id: string; days: Record<string, Date> };
 const pool = globalThis as typeof globalThis & {
   classroomMongo?: Promise<MongoClient>;
 };
@@ -33,5 +36,10 @@ export async function classroomDatabase() {
 export async function progressCollection() {
   return (await classroomDatabase()).collection<ProgressDocument>(
     "student_progress",
+  );
+}
+export async function courseEntryCollection() {
+  return (await classroomDatabase()).collection<CourseEntryDocument>(
+    "student_course_entries",
   );
 }

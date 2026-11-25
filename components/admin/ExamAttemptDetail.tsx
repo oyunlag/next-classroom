@@ -1,4 +1,5 @@
 "use client";
+import AdminSelect from "./AdminSelect";
 import { useState } from "react";
 import type { teacherExamDetail } from "@/lib/exam/service";
 import { examStatusLabels } from "./ExamResultGroup";
@@ -40,22 +41,25 @@ export default function ExamAttemptDetail({
         {detail.history.length > 0 && (
           <label className="admin-exam-history-label">
             Оролдлого
-            <select
-              value={generation}
-              onChange={(event) => setGeneration(Number(event.target.value))}
-            >
-              {detail.status !== "reset" && (
-                <option value={detail.generation}>
-                  {detail.generation + 1}-р оролдлого · Одоогийн
-                </option>
-              )}
-              {[...detail.history].reverse().map((a) => (
-                <option key={a.generation} value={a.generation}>
-                  {a.generation + 1}-р оролдлого · {a.result?.total ?? "—"}/100
-                  · {dateLabel(a.resetAt)}
-                </option>
-              ))}
-            </select>
+            <AdminSelect
+              label="Оролдлого"
+              value={String(generation)}
+              onValueChange={(value) => setGeneration(Number(value))}
+              options={[
+                ...(detail.status === "reset"
+                  ? []
+                  : [
+                      {
+                        value: String(detail.generation),
+                        label: `${detail.generation + 1}-р оролдлого · Одоогийн`,
+                      },
+                    ]),
+                ...[...detail.history].reverse().map((a) => ({
+                  value: String(a.generation),
+                  label: `${a.generation + 1}-р оролдлого · ${a.result?.total ?? "—"}/100 · ${dateLabel(a.resetAt)}`,
+                })),
+              ]}
+            />
           </label>
         )}
         {previous && (
@@ -73,21 +77,18 @@ export default function ExamAttemptDetail({
             </p>
             <label>
               Хариултын хувилбар{" "}
-              <select
-                value={backupId}
-                onChange={(event) => setBackupId(event.target.value)}
-              >
-                <option value="">Үндсэн хадгалсан хариулт</option>
-                {backups.map((b) => (
-                  <option key={b._id} value={b._id}>
-                    {dateLabel(b.receivedAt)} ·{" "}
-                    {Object.keys(b.answers.choices).length}/20 тест ·{" "}
-                    {b.reason === "after_finish"
-                      ? "Шалгалт дууссаны дараа ирсэн"
-                      : "Хадгалалт зөрсөн"}
-                  </option>
-                ))}
-              </select>
+              <AdminSelect
+                label="Хариултын хувилбар"
+                value={backups.some((b) => b._id === backupId) ? backupId : ""}
+                onValueChange={setBackupId}
+                options={[
+                  { value: "", label: "Үндсэн хадгалсан хариулт" },
+                  ...backups.map((b) => ({
+                    value: b._id,
+                    label: `${dateLabel(b.receivedAt)} · ${Object.keys(b.answers.choices).length}/20 тест · ${b.reason === "after_finish" ? "Шалгалт дууссаны дараа ирсэн" : "Хадгалалт зөрсөн"}`,
+                  })),
+                ]}
+              />
             </label>
             {backup && (
               <p role="status">

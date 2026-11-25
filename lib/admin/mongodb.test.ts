@@ -342,15 +342,13 @@ test(
       const setupCodes = new Map<string, string>();
       const passwordFor = (id: string) => id + "-private-test-password";
       // Include a pre-upgrade account whose existing password is its school email.
-      await db
-        .collection("admin_accounts")
-        .insertOne({
-          _id: "alpha" as never,
-          name: "alpha",
-          email: "alpha@oyunlag.edu.mn",
-          active: true,
-          passwordHash: await hashPassword("alpha@oyunlag.edu.mn"),
-        });
+      await db.collection("admin_accounts").insertOne({
+        _id: "alpha" as never,
+        name: "alpha",
+        email: "alpha@oyunlag.edu.mn",
+        active: true,
+        passwordHash: await hashPassword("alpha@oyunlag.edu.mn"),
+      });
       assert.equal(
         await authenticateAdmin("alpha", "alpha@oyunlag.edu.mn"),
         null,
@@ -359,7 +357,8 @@ test(
         setupCodes.set(id, secret);
       });
       for (const [id, code] of setupCodes) {
-        const temporaryPassword = id === "alpha" ? "alpha@oyunlag.edu.mn" : code;
+        const temporaryPassword =
+          id === "alpha" ? "alpha@oyunlag.edu.mn" : code;
         const challenge = await login(
           request("/api/admin/session", {
             username: id,

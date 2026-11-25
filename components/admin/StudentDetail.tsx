@@ -1,6 +1,7 @@
 "use client";
+import AdminSelect from "./AdminSelect";
 import { useEffect, useState } from "react";
-import { Check, Code2, Save } from "lucide-react";
+import { Check, Code2, LifeBuoy, Save } from "lucide-react";
 import type {
   Group,
   StudentRow,
@@ -8,6 +9,7 @@ import type {
 } from "@/lib/admin/types";
 import { courses, type Course } from "@/lib/student/identity";
 import AdminDialog from "./AdminDialog";
+import StudentSupportDialog from "./StudentSupportDialog";
 import { adminRequest, courseLabels, dateLabel, saveAdmin } from "./api";
 const statusLabels = {
   complete: "Дууссан",
@@ -18,20 +20,25 @@ const statusLabels = {
 export default function StudentDetail({
   student,
   groups,
+  initialCourse,
   onClose,
   onSaved,
 }: {
   student: StudentRow;
   groups: Group[];
+  initialCourse?: Course;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
   const [profileExpanded, setProfileExpanded] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
   const [name, setName] = useState(student.name),
     [notes, setNotes] = useState(student.notes),
     [groupId, setGroupId] = useState(student.groupId || "");
   const [course, setCourse] = useState<Course>(
-      courses.find((course) => student.courses[course]) || "python",
+      initialCourse ||
+        courses.find((course) => student.courses[course]) ||
+        "python",
     ),
     [exerciseId, setExerciseId] = useState("");
   const [resource, setResource] = useState<{
@@ -67,6 +74,21 @@ export default function StudentDetail({
       });
     return () => controller.abort();
   }, [student.id, course, exerciseId, resourceKey]);
+  if (supportOpen)
+    return (
+      <StudentSupportDialog
+        student={{
+          ...student,
+          completed:
+            detail?.summary.completed ??
+            student.courses[course]?.completed ??
+            0,
+        }}
+        course={course}
+        onClose={() => setSupportOpen(false)}
+        onOpenWork={() => setSupportOpen(false)}
+      />
+    );
   return (
     <AdminDialog title={student.name || student.id} onClose={onClose} wide>
       <div className="admin-student-layout">
@@ -123,18 +145,19 @@ export default function StudentDetail({
                 placeholder="Нэр нэмэх"
               />
               <label htmlFor="profile-group">Анги</label>
-              <select
+              <AdminSelect
                 id="profile-group"
+                label="Анги"
                 value={groupId}
-                onChange={(e) => setGroupId(e.target.value)}
-              >
-                <option value="">Анги оноогоогүй</option>
-                {groups.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name}
-                  </option>
-                ))}
-              </select>
+                onValueChange={(value) => {
+                  setGroupId(value);
+                  setSaved(false);
+                }}
+                options={[
+                  { value: "", label: "Анги оноогоогүй" },
+                  ...groups.map((g) => ({ value: g.id, label: g.name })),
+                ]}
+              />
               <label htmlFor="profile-notes">Багшийн тэмдэглэл</label>
               <textarea
                 id="profile-notes"
@@ -153,6 +176,12 @@ export default function StudentDetail({
           </div>
         </section>
         <section className="admin-student-work">
+          <button
+            className="admin-secondary admin-detail-support"
+            onClick={() => setSupportOpen(true)}
+          >
+            <LifeBuoy size={16} /> Дэмжлэг ба ахицын түүх
+          </button>
           <div className="admin-course-tabs" role="group" aria-label="Хичээл">
             {courses.map((c) => (
               <button

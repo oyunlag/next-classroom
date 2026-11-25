@@ -1,4 +1,5 @@
 "use client";
+import AdminSelect from "./AdminSelect";
 import { useRef, useState } from "react";
 import type { Group } from "@/lib/admin/types";
 import { normalizeStudentId } from "@/lib/student/identity";
@@ -100,22 +101,16 @@ export default function AddStudentDialog({
           disabled={busy}
         />
         <label htmlFor="new-student-group">Анги</label>
-        <select
+        <AdminSelect
           id="new-student-group"
+          label="Анги"
           value={groupId}
-          onChange={(event) => setGroupId(event.target.value)}
+          onValueChange={setGroupId}
           required
-          disabled={busy || !groups.length}
-        >
-          <option value="" disabled>
-            Анги сонгох
-          </option>
-          {groups.map((group) => (
-            <option key={group.id} value={group.id}>
-              {group.name}
-            </option>
-          ))}
-        </select>
+          disabled={busy}
+          placeholder="Анги сонгох"
+          options={groups.map(({ id, name }) => ({ value: id, label: name }))}
+        />
         <p className="admin-muted">
           {groups.length
             ? "Зөвхөн танд хуваарилсан ангиуд харагдана."

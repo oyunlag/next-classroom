@@ -1,4 +1,6 @@
 "use client";
+import AdminSelect from "./AdminSelect";
+import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -237,22 +239,24 @@ export default function ExamResults({ identity }: { identity: AdminIdentity }) {
             <div className="admin-exam-controls">
               <label className="admin-exam-class-filter">
                 <span className="admin-sr-only">Анги</span>
-                <select
+                <AdminSelect
+                  label="Анги"
                   value={group}
-                  onChange={(e) => selectGroup(e.target.value)}
-                >
-                  <option value="all">Бүх анги</option>
-                  {groups.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.name}
-                    </option>
-                  ))}
-                </select>
+                  onValueChange={selectGroup}
+                  options={[
+                    { value: "all", label: "Бүх анги" },
+                    ...groups.map(({ id, name }) => ({
+                      value: id,
+                      label: name,
+                    })),
+                  ]}
+                />
               </label>
               <label className="admin-search">
                 <Search size={16} />
                 <span className="admin-sr-only">Нэр / ID</span>
-                <input
+                <Input
+                  className="admin-search-input"
                   type="search"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}

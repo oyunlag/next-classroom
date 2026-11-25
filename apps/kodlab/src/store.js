@@ -1,4 +1,4 @@
-import { exercises, quizzes, questions } from "./content.js";
+import { exercises, quizzes, questions, playgroundStarter } from "./content.js";
 import { createCloudProgress, messages } from "../../../lib/student/cloud.ts";
 // Active identity stays in memory: every page opening asks who is using the computer.
 export const LEGACY_STORAGE_KEY = "kodlab:progress:v1";
@@ -12,7 +12,7 @@ export const blank = () => ({
   best: {},
   history: [],
   active: "name",
-  play: 'let name = "Билгүүн";\nconsole.log("Сайн уу, " + name + "!");',
+  play: playgroundStarter,
   attempt: null,
 });
 export const state = blank();
@@ -24,6 +24,7 @@ const cloud = createCloudProgress("javascript", (status) => {
     window.dispatchEvent(new Event("kodlab-cloud"));
 });
 export const recoverCloudProgress = () => cloud.recover();
+export const saveCloudProgress = () => cloud.saveNow();
 export async function selectCloudStudent(value) {
   const id = normalizeStudentId(value);
   let local = null;

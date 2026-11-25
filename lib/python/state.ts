@@ -30,6 +30,7 @@ const cloud = createCloudProgress("python", (status) => {
   emit();
 });
 export const recoverCloudProgress = () => cloud.recover();
+export const savePythonProgress = () => cloud.saveNow();
 export const getState = () => state;
 export const getServerState = () => server;
 export function subscribe(listener: () => void) {
@@ -89,7 +90,14 @@ export function updateProgress(
   }
   state = { ...state, progress, saving };
   cloud.save(progress);
-  if (progress.completed.length > previous.completed.length) void cloud.flush();
+  if (
+    progress.completed.length > previous.completed.length ||
+    Object.entries(progress.quizAttempts).some(
+      ([id, attempt]) =>
+        attempt.submitted && !previous.quizAttempts[id]?.submitted,
+    )
+  )
+    void cloud.saveNow();
   emit();
 }
 if (typeof window !== "undefined") {

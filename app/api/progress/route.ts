@@ -1,8 +1,13 @@
-import { isRegisteredLearner, teacherIdByName } from "@/lib/student/registry";
+import { registeredLearnerKind, teacherIdByName } from "@/lib/student/registry";
 import { studentExamActive } from "@/lib/exam/access";
-import { summarize } from "@/lib/admin/progress";
+import { hasWorkChange, parseProgress, summarize } from "@/lib/admin/progress";
+import { studentGuidance } from "@/lib/admin/classroom-data";
+import { schoolDay } from "@/lib/student/classroom";
 import { readJsonObject, sameOrigin } from "@/lib/http/request";
-import { progressCollection } from "@/lib/student/database";
+import {
+  courseEntryCollection,
+  progressCollection,
+} from "@/lib/student/database";
 import { parseProgressRequest } from "@/lib/student/protocol";
 
 export const runtime = "nodejs";
@@ -39,7 +44,8 @@ export async function POST(request: Request) {
         },
         423,
       );
-    if (!(await isRegisteredLearner(studentId)))
+    const learner = await registeredLearnerKind(studentId);
+    if (!learner)
       return json(
         {
           code: "student_not_registered",
@@ -48,16 +54,50 @@ export async function POST(request: Request) {
         },
         403,
       );
+    if (body.action === "guidance")
+      return json({
+        guidance:
+          learner === "student" ? await studentGuidance(studentId, course) : [],
+      });
     const collection = await progressCollection();
     const _id = `${course}:${studentId}`;
+    const now = new Date();
+    const day = schoolDay(now);
     if (body.action === "load") {
-      const doc = await collection.findOne({ _id });
+      const doc = await collection.findOne(
+        { _id },
+        { projection: { progressJson: 1, revision: 1 } },
+      );
+      const progress = doc ? JSON.parse(doc.progressJson) : null;
+      if (learner === "student")
+        await (
+          await courseEntryCollection()
+        ).updateOne(
+          { _id },
+          { $min: { [`days.${day}`]: now } },
+          { upsert: true },
+        );
       return json({
-        progress: doc ? JSON.parse(doc.progressJson) : null,
+        progress,
         revision: doc?.revision ?? 0,
       });
     }
     const { revision } = body;
+    const summary = summarize(course, body.progress);
+    const previous =
+      learner === "student"
+        ? await collection.findOne(
+            { _id, revision },
+            { projection: { progressJson: 1 } },
+          )
+        : null;
+    const worked =
+      learner === "student" &&
+      hasWorkChange(
+        course,
+        parseProgress(previous?.progressJson || "{}"),
+        body.progress,
+      );
     const result = await collection.updateOne(
       { _id, revision },
       {
@@ -65,9 +105,17 @@ export async function POST(request: Request) {
           studentId,
           course,
           progressJson: JSON.stringify(body.progress),
-          updatedAt: new Date(),
-          adminSummary: summarize(course, body.progress),
+          updatedAt: now,
+          adminSummary: summary,
           adminSummaryRevision: revision + 1,
+          ...(worked && {
+            [`classroomDays.${day}`]: {
+              savedAt: now,
+              completed: summary.completed,
+              attempted: summary.attempted,
+              assisted: summary.assisted,
+            },
+          }),
         },
         $inc: { revision: 1 },
       },

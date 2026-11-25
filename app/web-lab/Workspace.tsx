@@ -1,5 +1,8 @@
 "use client";
 
+import TeacherGuidance from "@/components/student/TeacherGuidance";
+import ProgressSaveButton from "@/components/student/ProgressSaveButton";
+
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -63,7 +66,7 @@ type Props = {
   status: keyof typeof messages;
   sampleImage: string;
   onChange: (progress: Progress) => void;
-  onSave: () => void;
+  onSave: () => Promise<boolean>;
   onRecover: () => void;
   onSwitchStudent: () => void;
 };
@@ -158,7 +161,9 @@ export default function Workspace({
   }
 
   function edit(code: string) {
-    const updated = { ...files, [file]: code.slice(0, maxCodeLength) };
+    const updatedCode = code.slice(0, maxCodeLength);
+    if (updatedCode === files[file]) return;
+    const updated = { ...files, [file]: updatedCode };
     if (free) onChange({ ...latest.current, playground: updated });
     else
       onChange({
@@ -359,6 +364,11 @@ export default function Workspace({
           </b>
         </button>
       </header>
+      <div className="classroom-save-actions">
+        <span role="status">{messages[status]}</span>
+        <ProgressSaveButton onSave={onSave} />
+      </div>
+      <TeacherGuidance studentId={student} course="htmlcss" />
       <div className={styles.appBody}>
         {menuOpen && (
           <button
@@ -829,15 +839,6 @@ export default function Workspace({
                         Хуулбараа татаж, серверээс ачаалах
                       </button>
                     </div>
-                  )}
-                  {status === "offline" && (
-                    <button
-                      type="button"
-                      className={styles.secondary}
-                      onClick={onSave}
-                    >
-                      Одоо хадгалах
-                    </button>
                   )}
                 </section>
               </div>

@@ -169,7 +169,7 @@ export async function studentDetail(
     updatedAt: doc?.updatedAt?.toISOString() || null,
   };
 }
-async function requireStudent(id: string, teacherId: string) {
+export async function requireStudent(id: string, teacherId: string) {
   const { profiles } = await adminCollections();
   const profile = await profiles.findOne({
     _id: id,

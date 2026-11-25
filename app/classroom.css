@@ -726,3 +726,77 @@ pre ::selection,
     display: none;
   }
 }
+
+.classroom-guidance-host:empty {
+  display: none;
+}
+.classroom-guidance {
+  max-width: 76rem;
+  margin: 0.75rem auto;
+  background: #eff6ff;
+  color: #173f76;
+  border: 1px solid #b5d4f5;
+  border-radius: 9px;
+  overflow-wrap: anywhere;
+}
+.classroom-guidance-host {
+  padding-inline: clamp(0.75rem, 3vw, 2rem);
+}
+.classroom-guidance summary {
+  padding: 0.73rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.classroom-guidance article {
+  padding: 0.8rem 1rem;
+  border-top: 1px solid #d2e3f8;
+}
+.classroom-guidance time {
+  font-size: 0.77rem;
+  font-weight: 650;
+}
+.classroom-guidance p {
+  white-space: pre-wrap;
+  margin: 0.2rem 0 0;
+  font-size: 0.92rem;
+}
+
+.classroom-save-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding: 6px clamp(0.75rem, 3vw, 2rem);
+  background: #f8fbff;
+  border-bottom: 1px solid #dce6f2;
+  color: #46617f;
+  font-size: 12px;
+}
+.classroom-save-button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid #adc4e4;
+  border-radius: 7px;
+  color: #19477e;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.classroom-save-button:hover:not(:disabled) {
+  background: #edf5ff;
+}
+.classroom-save-button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+.classroom-save-button:focus-visible {
+  outline: 2px solid #2e66a7;
+  outline-offset: 2px;
+}

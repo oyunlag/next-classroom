@@ -23,11 +23,16 @@ test("add-student form keeps input on failure, blocks duplicate clicks and submi
     "document",
     "navigator",
     "HTMLElement",
+    "HTMLFormElement",
+    "HTMLSelectElement",
     "Element",
     "Node",
+    "DocumentFragment",
+    "Event",
     "MutationObserver",
   ])
     install(key, Reflect.get(dom.window, key));
+  install("getComputedStyle", dom.window.getComputedStyle.bind(dom.window));
   install("React", React);
   install("IS_REACT_ACT_ENVIRONMENT", true);
   dom.window.HTMLDialogElement.prototype.showModal = function () {
@@ -87,10 +92,9 @@ test("add-student form keeps input on failure, blocks duplicate clicks and submi
         }),
       ),
     );
-    assert.equal(
-      (document.getElementById("new-student-group") as HTMLSelectElement).value,
-      "own-class",
-    );
+    const classPicker = document.getElementById("new-student-group")!;
+    assert.equal(classPicker.getAttribute("role"), "combobox");
+    assert.equal(classPicker.textContent?.trim(), "7Г");
     await fill("new-student-id", "20s0452");
     await fill("new-student-name", " М.Ананд ");
     await act(async () => {

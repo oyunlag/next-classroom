@@ -1,4 +1,5 @@
 export const courseGradeLabel = '6–8-р анги';
+export const playgroundStarter = 'let name = "Билгүүн";\nconsole.log("Сайн уу, " + name + "!");';
 export const topics = [
   {id:'variables',title:'Хувьсагч',tag:'let',note:'Утга, төрөл, утга оноох',color:'#5369ca',description:'Хувьсагч утга хадгална. let-ээр нэр өгч зарлаад, дараа нь = ашиглан утгыг нь өөрчилнө. Тоо нь number, хашилтад бичсэн текст нь string, true ба false нь boolean төрөлтэй. typeof ашиглан утгын төрлийг мэдэж болно.',example:'let name = "John";\nname = "Билгүүн";\nconsole.log(name);',output:'Билгүүн'},
   {id:'console',title:'Хэвлэх ба тооцоолох',tag:'console.log',note:'Текст, тоо, арифметик',color:'#b07822',description:'console.log() доторх утгыг консолд хэвлэнэ. + нь тоог нэмэх, текст залгахад хэрэглэгдэнэ. *, /, -, % нь тооцоолох үйлдлүүд.',example:'let price = 2500;\nlet count = 3;\nconsole.log("Нийт: " + price * count);',output:'Нийт: 7500'},

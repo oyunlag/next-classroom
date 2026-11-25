@@ -3,14 +3,17 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowDownUp,
+  Building2,
   ChevronLeft,
   ChevronRight,
   Code2,
+  CalendarDays,
   Download,
-  GraduationCap,
+  ListPlus,
   Menu,
   RefreshCw,
   Search,
+  SlidersHorizontal,
   Users,
   UserRoundPlus,
   X,
@@ -26,11 +29,15 @@ import { courses, type Course } from "@/lib/student/identity";
 import {
   adminRequest,
   courseLabels,
+  courseOptions,
   dateLabel,
   downloadCsv,
   saveAdmin,
 } from "./api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import AdminDialog from "./AdminDialog";
+import AdminSelect from "./AdminSelect";
 import AddStudentDialog from "./AddStudentDialog";
 import AdminNavigation from "./AdminNavigation";
 import { GroupEditor, AddStudents } from "./RosterDialogs";
@@ -38,10 +45,12 @@ import StudentDetail from "./StudentDetail";
 import DeleteStudentDialog from "./DeleteStudentDialog";
 import StudentTableRow from "./StudentTableRow";
 import TeachersPanel from "./TeachersPanel";
+import ClassroomMonitor from "./ClassroomMonitor";
+import SchoolDirectory from "./SchoolDirectory";
 
 const statusOptions: { id: RosterStatus; label: string }[] = [
   { id: "all", label: "Бүгд" },
-  { id: "working", label: "Ажиллаж байгаа" },
+  { id: "working", label: "Хийж буй" },
   { id: "not-started", label: "Эхлээгүй" },
   { id: "complete", label: "Дуусгасан" },
 ];
@@ -53,18 +62,24 @@ const sortOptions: { id: RosterSort; label: string }[] = [
 const PAGE_SIZE = 25;
 export default function AdminDashboard({
   identity,
+  schoolDirectoryAccess,
 }: {
   identity: AdminIdentity;
+  schoolDirectoryAccess: boolean;
 }) {
   const [data, setData] = useState<Roster | null>(null),
     [error, setError] = useState(""),
     [refreshing, setRefreshing] = useState(true);
   const [view, setView] = useState<"students" | "teachers">("students"),
+    [section, setSection] = useState<"classroom" | "roster" | "directory">(
+      "classroom",
+    ),
     [group, setGroup] = useState("all"),
     [query, setQuery] = useState(""),
     [course, setCourse] = useState<Course | "all">("all"),
     [status, setStatus] = useState<RosterStatus>("all"),
     [sort, setSort] = useState<RosterSort>("recent"),
+    [filtersOpen, setFiltersOpen] = useState(false),
     [page, setPage] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set()),
     [assignGroup, setAssignGroup] = useState(""),
@@ -72,6 +87,7 @@ export default function AdminDashboard({
     [notice, setNotice] = useState(""),
     [deletedId, setDeletedId] = useState<string | null>(null);
   const [studentId, setStudentId] = useState<string | null>(null),
+    [detailCourse, setDetailCourse] = useState<Course>(),
     [pendingDelete, setPendingDelete] = useState<StudentRow | null>(null),
     [groupEditor, setGroupEditor] = useState<Group | null | undefined>(
       undefined,
@@ -112,6 +128,7 @@ export default function AdminDashboard({
   }, [load]);
   const students = data?.students || [],
     groups = data?.groups || [];
+  const showingRoster = view === "students" && section === "roster";
   const { filtered, counts } = rosterView(students, {
     group,
     query,
@@ -144,6 +161,7 @@ export default function AdminDashboard({
   function selectGroup(id: string) {
     setGroup(id);
     setView("students");
+    if (section === "directory") setSection("classroom");
     setPage(0);
     setQuery("");
     setStatus("all");
@@ -157,6 +175,10 @@ export default function AdminDashboard({
       else next.add(id);
       return next;
     });
+  }
+  function openStudent(id: string, course?: Course) {
+    setDetailCourse(course);
+    setStudentId(id);
   }
   function exportRoster() {
     downloadCsv([
@@ -229,111 +251,133 @@ export default function AdminDashboard({
       </header>
       <div className="admin-body">
         <aside className="admin-sidebar">{navigation}</aside>
-        <main id="main-content" className="admin-main">
+        <main
+          id="main-content"
+          className={
+            showingRoster ? "admin-main admin-main--roster" : "admin-main"
+          }
+        >
           <div className="admin-title-row">
             <div>
-              <p className="admin-breadcrumb">
-                Багшийн орчин <ChevronRight size={13} />{" "}
+              {!showingRoster && (
+                <p className="admin-breadcrumb">
+                  Багшийн орчин <ChevronRight size={13} />{" "}
+                  {view === "teachers"
+                    ? "Миний бүртгэл"
+                    : section === "directory"
+                      ? "Сургуулийн бүртгэл"
+                      : group === "all"
+                        ? "Сурагчдын ахиц"
+                        : groups.find((g) => g.id === group)?.name || "Анги"}
+                </p>
+              )}
+              <h1>
                 {view === "teachers"
-                  ? "Миний бүртгэл"
-                  : group === "all"
-                    ? "Сурагчдын ахиц"
-                    : groups.find((g) => g.id === group)?.name || "Анги"}
-              </p>
-              <h1>{view === "teachers" ? "Багшийн мэдээлэл" : groupName}</h1>
-              <p className="admin-scope-note">
-                {view === "teachers"
-                  ? identity.email
-                  : course === "all"
-                    ? "Танд хуваарилсан сурагчдын хадгалсан ажил, дасгалын ахиц."
-                    : `${courseLabels[course]} хичээлийн хадгалсан ажил, дасгалын ахиц.`}
-              </p>
+                  ? "Багшийн мэдээлэл"
+                  : section === "directory"
+                    ? "Сургуулийн бүртгэл"
+                    : groupName}
+              </h1>
+              {!showingRoster && (
+                <p className="admin-scope-note">
+                  {view === "teachers"
+                    ? identity.email
+                    : section === "directory"
+                      ? "Сургуулийн хэмжээнд КодЛабын бүртгэлийг харах."
+                      : "Анги, хичээлээр сурагчдын оролцоо, ахиц, дэмжлэгийг хянана."}
+                </p>
+              )}
             </div>
-            {view === "students" && (
+            {showingRoster && (
               <div className="admin-title-actions">
-                <Link href="/admin/exams" className="admin-secondary">
-                  <GraduationCap size={16} />
-                  Шалгалтын дүн
-                </Link>
-                <button
-                  className="admin-secondary admin-assign-button"
+                <Button
+                  variant="outline"
+                  className="admin-assign-button"
                   aria-label="Сурагч хуваарилах"
+                  title="Сурагч хуваарилах"
                   onClick={() => setAddStudents(true)}
                 >
-                  <UserRoundPlus size={16} />
-                  <span>Сурагч хуваарилах</span>
-                </button>
-                <button
-                  className="admin-primary"
+                  <ListPlus size={16} />
+                  <span>Хуваарилах</span>
+                </Button>
+                <Button
+                  aria-label="Сурагч нэмэх"
                   disabled={!data}
                   onClick={() => setAddingStudent(true)}
                 >
                   <UserRoundPlus size={16} />
-                  Сурагч нэмэх
-                </button>
+                  <span className="admin-add-label">Сурагч нэмэх</span>
+                  <span className="admin-add-short" aria-hidden="true">
+                    Нэмэх
+                  </span>
+                </Button>
               </div>
             )}
           </div>
+          {view === "students" && (
+            <nav className="admin-section-switch" aria-label="Сурагчдын хяналт">
+              <button
+                type="button"
+                aria-pressed={section === "classroom"}
+                onClick={() => setSection("classroom")}
+              >
+                <CalendarDays size={17} /> Хичээлийн хяналт
+              </button>
+              <button
+                type="button"
+                aria-pressed={section === "roster"}
+                onClick={() => setSection("roster")}
+              >
+                <Users size={17} /> Сурагчдын бүртгэл
+              </button>
+              {schoolDirectoryAccess && (
+                <button
+                  type="button"
+                  aria-pressed={section === "directory"}
+                  onClick={() => setSection("directory")}
+                >
+                  <Building2 size={17} /> Сургуулийн бүртгэл
+                </button>
+              )}
+            </nav>
+          )}
           {view === "teachers" ? (
             <TeachersPanel
               teachers={data?.teachers || []}
               groups={groups}
               onSelect={() => selectGroup("all")}
             />
+          ) : section === "directory" && schoolDirectoryAccess ? (
+            <SchoolDirectory />
+          ) : section === "classroom" ? (
+            <>
+              {error && (
+                <p className="admin-monitor-error" role="alert">
+                  {error}{" "}
+                  <button className="admin-text" onClick={() => void load()}>
+                    Дахин оролдох
+                  </button>
+                </p>
+              )}
+              <ClassroomMonitor
+                groups={groups}
+                group={group}
+                onGroup={selectGroup}
+                onOpen={openStudent}
+                loading={refreshing}
+              />
+            </>
           ) : (
             <>
-              <div
-                className="admin-overview"
-                aria-label="Сонгосон сурагчдын тойм"
-              >
-                <div>
-                  <span>Нийт сурагч</span>
-                  <strong>{data ? counts.all : "—"}</strong>
-                </div>
-                <div>
-                  <span>Ажил хадгалсан</span>
-                  <strong>
-                    {data ? counts.working + counts.complete : "—"}
-                  </strong>
-                </div>
-                <div>
-                  <span>Эхлээгүй</span>
-                  <strong>{data ? counts["not-started"] : "—"}</strong>
-                </div>
-              </div>
               <section className="admin-roster" aria-label="Сурагчдын жагсаалт">
-                <div className="admin-roster-heading">
-                  <h2>Сурагчдын ахиц</h2>
-                  <div className="admin-roster-tools">
-                    <button
-                      className={`admin-icon ${refreshing ? "admin-refreshing" : ""}`}
-                      aria-label="Жагсаалт шинэчлэх"
-                      disabled={refreshing}
-                      onClick={() => {
-                        setRefreshing(true);
-                        void load();
-                      }}
-                    >
-                      <RefreshCw size={17} />
-                    </button>
-                    <button
-                      className="admin-secondary admin-export"
-                      aria-label="CSV татах"
-                      disabled={!filtered.length}
-                      onClick={exportRoster}
-                    >
-                      <Download size={15} />
-                      <span>CSV татах</span>
-                    </button>
-                  </div>
-                </div>
                 <div className="admin-roster-toolbar">
-                  <label className="admin-search">
+                  <label className="admin-search admin-roster-search">
                     <Search size={17} />
                     <span className="admin-sr-only">ID эсвэл нэрээр хайх</span>
-                    <input
+                    <Input
+                      className="admin-search-input"
                       type="search"
-                      placeholder="Нэр эсвэл сурагчийн ID…"
+                      placeholder="Нэр эсвэл ID"
                       value={query}
                       onChange={(e) => {
                         setQuery(e.target.value);
@@ -341,65 +385,92 @@ export default function AdminDashboard({
                       }}
                     />
                   </label>
-                  <label className="admin-filter">
-                    <span className="admin-sr-only">Ангийн шүүлт</span>
-                    <select
-                      aria-label="Ангиар шүүх"
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="admin-roster-filter-toggle"
+                    aria-label="Жагсаалт шүүх, эрэмбэлэх"
+                    aria-expanded={filtersOpen}
+                    data-active={course !== "all" || sort !== "recent"}
+                    aria-controls="admin-roster-filters"
+                    title="Жагсаалт шүүх, эрэмбэлэх"
+                    onClick={() => setFiltersOpen((open) => !open)}
+                  >
+                    <SlidersHorizontal size={17} />
+                  </Button>
+                  <div
+                    className="admin-roster-filters"
+                    id="admin-roster-filters"
+                    data-expanded={filtersOpen}
+                  >
+                    <AdminSelect
+                      label="Ангиар шүүх"
                       value={group}
-                      onChange={(e) => selectGroup(e.target.value)}
-                    >
-                      <option value="all">Бүх анги</option>
-                      {groups.map((g) => (
-                        <option key={g.id} value={g.id}>
-                          {g.name}
-                        </option>
-                      ))}
-                      {(groupCounts.get("unassigned") || 0) > 0 && (
-                        <option value="unassigned">Анги оноогоогүй</option>
-                      )}
-                    </select>
-                  </label>
-                  <label className="admin-filter">
-                    <span className="admin-sr-only">Хичээлийн шүүлт</span>
-                    <select
-                      aria-label="Хичээлээр шүүх"
+                      onValueChange={selectGroup}
+                      options={[
+                        { value: "all", label: "Бүх анги" },
+                        ...groups.map((g) => ({ value: g.id, label: g.name })),
+                        ...((groupCounts.get("unassigned") || 0) > 0
+                          ? [{ value: "unassigned", label: "Анги оноогоогүй" }]
+                          : []),
+                      ]}
+                    />
+                    <AdminSelect
+                      label="Хичээлээр шүүх"
                       value={course}
-                      onChange={(e) => {
-                        setCourse(
-                          courses.find((c) => c === e.target.value) || "all",
-                        );
+                      options={[
+                        { value: "all", label: "Бүх хичээл" },
+                        ...courseOptions,
+                      ]}
+                      onValueChange={(value) => {
+                        setCourse(value);
                         setPage(0);
                       }}
-                    >
-                      <option value="all">Бүх хичээл</option>
-                      {courses.map((c) => (
-                        <option key={c} value={c}>
-                          {courseLabels[c]}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="admin-sort-control" title="Эрэмбэлэх">
-                    <ArrowDownUp size={15} />
-                    <select
+                    />
+                    <AdminSelect
+                      label="Эрэмбэлэх"
                       className="admin-sort"
-                      aria-label="Эрэмбэлэх"
+                      icon={<ArrowDownUp size={15} />}
                       value={sort}
-                      onChange={(e) => {
-                        setSort(
-                          sortOptions.find((s) => s.id === e.target.value)
-                            ?.id || "recent",
-                        );
+                      options={sortOptions.map(({ id, label }) => ({
+                        value: id,
+                        label,
+                      }))}
+                      onValueChange={(value) => {
+                        setSort(value);
                         setPage(0);
                       }}
+                    />
+                  </div>
+                  <div className="admin-roster-tools">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className={refreshing ? "admin-refreshing" : undefined}
+                      aria-label="Жагсаалт шинэчлэх"
+                      title="Жагсаалт шинэчлэх"
+                      disabled={refreshing}
+                      onClick={() => {
+                        setRefreshing(true);
+                        void load();
+                      }}
                     >
-                      {sortOptions.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                      <RefreshCw size={17} />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="admin-export"
+                      aria-label="CSV татах"
+                      title="CSV татах"
+                      disabled={!filtered.length}
+                      onClick={exportRoster}
+                    >
+                      <Download size={15} />
+                      <span>CSV татах</span>
+                    </Button>
+                  </div>
                 </div>
                 <div
                   className="admin-status-tabs"
@@ -486,21 +557,16 @@ export default function AdminDashboard({
                 {!!selected.size && (
                   <div className="admin-bulk">
                     <strong>{selected.size} сурагч сонгосон</strong>
-                    <select
-                      aria-label="Сонгосон сурагчдад анги оноох"
+                    <AdminSelect
+                      label="Сонгосон сурагчдад анги оноох"
+                      placeholder="Анги сонгох"
                       value={assignGroup}
-                      onChange={(e) => setAssignGroup(e.target.value)}
-                    >
-                      <option value="" disabled>
-                        Анги сонгох
-                      </option>
-                      {groups.map((g) => (
-                        <option key={g.id} value={g.id}>
-                          {g.name}
-                        </option>
-                      ))}
-                      <option value="unassigned">Анги оноогоогүй</option>
-                    </select>
+                      onValueChange={setAssignGroup}
+                      options={[
+                        ...groups.map((g) => ({ value: g.id, label: g.name })),
+                        { value: "unassigned", label: "Анги оноогоогүй" },
+                      ]}
+                    />
                     <button
                       className="admin-primary"
                       disabled={busy || !assignGroup}
@@ -597,7 +663,7 @@ export default function AdminDashboard({
                               groups={groups}
                               selected={selected.has(student.id)}
                               onToggle={() => toggle(student.id)}
-                              onOpen={() => setStudentId(student.id)}
+                              onOpen={() => openStudent(student.id)}
                               disabled={busy}
                               onDelete={() => setPendingDelete(student)}
                             />
@@ -711,6 +777,7 @@ export default function AdminDashboard({
           key={openedStudent.id}
           student={openedStudent}
           groups={groups}
+          initialCourse={detailCourse}
           onClose={() => setStudentId(null)}
           onSaved={load}
         />
@@ -733,6 +800,7 @@ export default function AdminDashboard({
           onClose={() => setAddingStudent(false)}
           onSaved={async (student) => {
             selectGroup(student.groupId);
+            setSection("roster");
             setCourse("all");
             setQuery(student.id);
             setDeletedId(null);

@@ -33,7 +33,7 @@ type Session = {
   revision: number;
   pending: Snapshot | null;
   sent: Snapshot | null;
-  busy: boolean;
+  inFlight: Promise<boolean> | null;
   blocked: "conflict" | "rejected" | "examActive" | null;
   inherited: Backup[];
   lastSaved: string;
@@ -187,14 +187,7 @@ export function createCloudProgress(
       throw error;
     }
   }
-  async function flush(s: Session | null = session): Promise<void> {
-    if (!s || s.busy || s.blocked || !s.pending) return;
-    if (session === s) {
-      clearTimeout(s.timer);
-      s.timer = undefined;
-    }
-    s.busy = true;
-    const pending = s.sent ?? s.pending;
+  async function write(s: Session, pending: Snapshot) {
     s.sent = pending;
     backup(s);
     report(s, "saving");
@@ -208,6 +201,7 @@ export function createCloudProgress(
       s.inherited.forEach(removeBackup);
       s.inherited = [];
       report(s, s.pending ? "saving" : "saved");
+      return true;
     } catch (error) {
       const status = statusCode(error);
       s.blocked =
@@ -220,14 +214,34 @@ export function createCloudProgress(
               : null;
       report(s, s.blocked ?? "offline");
       if (!s.blocked) schedule(s, 10000);
-      return;
-    } finally {
-      s.busy = false;
+      return false;
     }
-    if (s.pending) {
-      if (session === s) schedule(s);
-      else void flush(s);
+  }
+  function flush(s: Session | null = session): Promise<boolean> {
+    if (!s || s.blocked) return Promise.resolve(false);
+    if (s.inFlight) return s.inFlight;
+    if (!s.pending) return Promise.resolve(true);
+    clearTimeout(s.timer);
+    s.timer = undefined;
+    s.inFlight = write(s, s.sent ?? s.pending).then((saved) => {
+      s.inFlight = null;
+      if (saved && s.pending) {
+        if (session === s) schedule(s);
+        else void flush(s);
+      }
+      return saved;
+    });
+    return s.inFlight;
+  }
+  async function saveNow(): Promise<boolean> {
+    const s = session;
+    if (!s) return false;
+    while (session === s && (s.inFlight || s.pending)) {
+      if (!(await flush(s))) return false;
     }
+    if (session !== s || s.blocked) return false;
+    report(s, "saved");
+    return true;
   }
   function stop() {
     if (!session) return;
@@ -246,7 +260,7 @@ export function createCloudProgress(
         revision: 0,
         pending: null,
         sent: null,
-        busy: false,
+        inFlight: null,
         blocked: null,
         inherited: [],
         lastSaved: "",
@@ -314,6 +328,7 @@ export function createCloudProgress(
       schedule(session);
     },
     flush,
+    saveNow,
     recover() {
       if (!session || session.blocked !== "conflict") return;
       const copies = [

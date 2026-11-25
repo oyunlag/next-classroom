@@ -1,4 +1,6 @@
 import { timeoutSignal } from "@/lib/http/timeout";
+import { schoolDay, schoolTimeZone } from "@/lib/student/classroom";
+import { courses } from "@/lib/student/identity";
 
 export async function adminRequest<T>(
   path: string,
@@ -26,7 +28,10 @@ export function csvCell(value: string | number) {
   if (/^[\s]*[=+\-@]/.test(text) || /^[\t\r]/.test(text)) text = "'" + text;
   return `"${text.replaceAll('"', '""')}"`;
 }
-export function downloadCsv(rows: (string | number)[][]) {
+export function downloadCsv(
+  rows: (string | number)[][],
+  filename = `kodlab-students-${schoolDay(new Date())}.csv`,
+) {
   const url = URL.createObjectURL(
     new Blob(
       ["\uFEFF" + rows.map((row) => row.map(csvCell).join(",")).join("\r\n")],
@@ -35,7 +40,7 @@ export function downloadCsv(rows: (string | number)[][]) {
   );
   const link = document.createElement("a");
   link.href = url;
-  link.download = `kodlab-students-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.download = filename;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -45,6 +50,10 @@ export const courseLabels = {
   nextjs: "Next.js",
   htmlcss: "HTML & CSS",
 };
+export const courseOptions = courses.map((value) => ({
+  value,
+  label: courseLabels[value],
+}));
 export const dateLabel = (date: string | null) =>
   date
     ? new Date(date).toLocaleString("mn-MN", {
@@ -52,5 +61,6 @@ export const dateLabel = (date: string | null) =>
         day: "numeric",
         hour: "2-digit",
         minute: "2-digit",
+        timeZone: schoolTimeZone,
       })
     : "Хараахан эхлээгүй";

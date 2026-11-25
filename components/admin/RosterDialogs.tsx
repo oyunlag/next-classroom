@@ -1,4 +1,5 @@
 "use client";
+import AdminSelect from "./AdminSelect";
 import { useState } from "react";
 import type { Group } from "@/lib/admin/types";
 import AdminDialog from "./AdminDialog";
@@ -112,18 +113,16 @@ export function AddStudents({
           Зөвхөн таны бүртгэлтэй сурагчдын ID-г бичнэ үү. Нэг мөрөнд нэг ID.
         </p>
         <label htmlFor="add-group">Анги</label>
-        <select
+        <AdminSelect
           id="add-group"
+          label="Анги"
           value={groupId}
-          onChange={(e) => setGroupId(e.target.value)}
-        >
-          <option value="">Анги оноогоогүй</option>
-          {groups.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
-        </select>
+          onValueChange={setGroupId}
+          options={[
+            { value: "", label: "Анги оноогоогүй" },
+            ...groups.map((g) => ({ value: g.id, label: g.name })),
+          ]}
+        />
         <p className="admin-error" role="alert">
           {error}
         </p>

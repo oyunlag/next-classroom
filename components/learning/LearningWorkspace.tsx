@@ -1,5 +1,8 @@
 "use client";
 
+import TeacherGuidance from "@/components/student/TeacherGuidance";
+import ProgressSaveButton from "@/components/student/ProgressSaveButton";
+
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
@@ -24,6 +27,7 @@ import {
   getCloudVersion,
   getCloudStatus,
   recoverCloudProgress,
+  saveCourseProgress,
   getDraft,
   getProgress,
   getServerProgress,
@@ -89,6 +93,18 @@ export default function LearningWorkspace({
   function saveDraft(files: Files, answers?: Record<string, string>) {
     updateProgress((current) => {
       const previous = getDraft(current, exercise);
+      const updatedAnswers = answers ?? previous.answers;
+      const unchanged = (
+        a: Record<string, string>,
+        b: Record<string, string>,
+      ) =>
+        Object.keys(a).length === Object.keys(b).length &&
+        Object.entries(a).every(([key, value]) => b[key] === value);
+      if (
+        unchanged(previous.files, files) &&
+        unchanged(previous.answers, updatedAnswers)
+      )
+        return current;
       return {
         ...current,
         completed: current.completed.filter((id) => id !== exercise.id),
@@ -97,7 +113,7 @@ export default function LearningWorkspace({
           [exercise.id]: {
             ...previous,
             files,
-            answers: answers ?? previous.answers,
+            answers: updatedAnswers,
           },
         },
       };
@@ -260,6 +276,10 @@ export default function LearningWorkspace({
           </details>
         </div>
       </header>
+      <div className="classroom-save-actions">
+        <ProgressSaveButton onSave={saveCourseProgress} />
+      </div>
+      <TeacherGuidance studentId={student} course="nextjs" />
       <div
         className="classroom-mobile-save"
         role="status"

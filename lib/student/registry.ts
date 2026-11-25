@@ -16,7 +16,7 @@ export async function teacherIdByName(name: string): Promise<string | null> {
   return id === null ? null : normalizeStudentId(id);
 }
 
-export async function isRegisteredLearner(id: string) {
+export async function registeredLearnerKind(id: string) {
   const student = await (
     await classroomDatabase()
   )
@@ -27,11 +27,12 @@ export async function isRegisteredLearner(id: string) {
       { _id: id, sourceId: { $type: "string" }, deletedAt: { $exists: false } },
       { projection: { _id: 1 } },
     );
-  if (student) return true;
-  return !!(await (
+  if (student) return "student";
+  const teacher = await (
     await accountCollection()
   ).findOne(
     { _id: id.toLowerCase(), active: true },
     { projection: { _id: 1 } },
-  ));
+  );
+  return teacher ? "teacher" : null;
 }
