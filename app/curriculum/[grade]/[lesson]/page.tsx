@@ -109,6 +109,16 @@ export default async function LessonPage({ params }: LessonPageProps) {
               >
                 Сэдвийн давтлагын тест →
               </Link>
+              {(entry.id === "conditional-game" ||
+                entry.id === "game-testing") && (
+                <Link
+                  className={styles.textLink}
+                  href={`/quiz-project?grade=${plan.grade}`}
+                  prefetch={false}
+                >
+                  Ховор хариулт · JavaScript төсөл →
+                </Link>
+              )}
             </div>
           </header>
 

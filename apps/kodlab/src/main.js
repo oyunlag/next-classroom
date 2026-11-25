@@ -31,6 +31,7 @@ function render(){
  cancelRuns();sequence++;busy=false;editor?.destroy();editor=null;
  if(!studentId){renderStudentGate();return;}
  app.innerHTML=header()+`<div class="app-body">${sidebar()}${section==='tests'?testsPage():workspace()}</div><dialog id="modal"></dialog><div id="toast" role="status"></div>`;
+ app.querySelector('.topnav').insertAdjacentHTML('beforeend',`<a class="nav-tab" href="/quiz-project" aria-label="Ховор хариулт · JavaScript төсөл">${icon('trophy')}<span>Төсөл</span></a>`);
  if(section!=='tests'){
   editor=new EditorView({doc:section==='play'?state.play:state.drafts[active.id]??active.starter,parent:document.querySelector('#editor'),extensions:[basicSetup,javascript(),EditorView.lineWrapping,EditorView.contentAttributes.of({'aria-label':'JavaScript код бичих талбар','spellcheck':'false'}),keymap.of([{key:'Mod-Enter',run:()=>{run(false);return true;}}]),EditorView.updateListener.of(update=>{
    if(!update.docChanged)return;sequence++;cancelRuns();setBusy(false);checks=[];

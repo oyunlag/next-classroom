@@ -121,6 +121,14 @@ export default function Home() {
           </div>
           <div className={styles.cardGroupHeading}>
             <p>Код бичих дадлага</p>
+            <Link
+              className={styles.projectLink}
+              href="/quiz-project"
+              prefetch={false}
+            >
+              Ховор хариулт · JavaScript төсөл{" "}
+              <ArrowRight size={15} aria-hidden="true" />
+            </Link>
           </div>
           <nav className={styles.lessons} aria-label="Код бичих дадлага">
             {lessons.map((lesson) => (

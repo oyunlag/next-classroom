@@ -129,6 +129,16 @@
   font-size: 13px;
   font-weight: 650;
 }
+.projectLink {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  min-height: 36px;
+  color: var(--lab-blue);
+}
+.projectLink:hover {
+  text-decoration: underline;
+}
 .lessons,
 .gradeCards {
   display: grid;
