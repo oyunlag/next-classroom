@@ -224,7 +224,7 @@ test(
         ).headers.get("x-middleware-next"),
         "1",
       );
-      const learnerToken = await studentSession("STUDENT8", "teacher1");
+      const learnerToken = await studentSession("STUDENT8");
       assert.equal(
         (
           await progress(
@@ -433,7 +433,7 @@ test(
           completed: ["name"],
           drafts: { name: 'let name = "Билгүүн"; console.log(name);' },
         };
-        const lessonToken = await studentSession(studentId, "teacher1");
+        const lessonToken = await studentSession(studentId);
         const lessonRequest = (action: string) =>
           progress(
             new Request("https://example.test/api/progress", {

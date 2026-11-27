@@ -150,26 +150,49 @@ function renderStudentGate(){
  <section class="classroom-story" aria-labelledby="course-heading"><div class="classroom-course-label"><span>JS</span><strong>JavaScript</strong><i></i>${courseGradeLabel}</div><h1 id="course-heading">Эхний кодоос<br>шинэ санаа руу.</h1><p>Хувьсагч үүсгэж, тооцоолол хийгээд, нөхцөл шалгаж сураарай. Кодынхоо үр дүнг шууд харж туршаарай.</p>
  <div class="classroom-code" aria-label="Код ба үр дүнгийн жишээ"><div class="classroom-code-file">${icon('code-2')}<span>hello.js</span><span>Жишээ</span></div><pre>${esc('let name = "Билгүүн";\nconsole.log("Сайн уу, " + name);')}</pre><div class="classroom-code-output"><span>ҮР ДҮН</span><pre>Сайн уу, Билгүүн</pre>${icon('check')}</div></div>
  <ul class="classroom-features"><li>${icon('check')}${exercises.length} дасгал</li><li>${icon('check')}Мэдлэгийн сорил</li><li>${icon('check')}Чөлөөт код</li></ul></section>
- <section class="classroom-entry-card" aria-labelledby="entry-heading"><div class="classroom-entry-icon">${icon('code-2')}</div><p class="classroom-eyebrow">ТАНЫ СУРАЛЦАХ ОРОН ЗАЙ</p><h2 id="entry-heading">Хичээлдээ тавтай морил.</h2><p class="classroom-entry-description">Сурагч бол ID-гаа, багш бол бүтэн нэрээ бичээрэй.</p>
- <form id="student-entry-form"><label for="student-id">Сурагчийн ID эсвэл багшийн бүтэн нэр</label><input id="student-id" name="studentId" placeholder="Жишээ: 8A-01" maxlength="${MAX_TEACHER_NAME_LENGTH}" autocomplete="username" autocapitalize="none" spellcheck="false" required aria-describedby="student-id-help student-id-error"><label for="lesson-credential">Хичээлийн код эсвэл багшийн нууц үг</label><input id="lesson-credential" type="password" autocomplete="off" required maxlength="1024"><p id="student-id-help" class="classroom-field-help">Багш бүртгэл дэх овог, нэр эсвэл нэвтрэх нэрээ ашиглаж болно.</p><p id="student-id-error" class="classroom-entry-error" role="alert"></p><button class="classroom-enter" type="submit">Хичээлд орох ${icon('arrow-right')}</button></form>
+ <section class="classroom-entry-card" aria-labelledby="entry-heading"><div class="classroom-entry-icon">${icon('code-2')}</div><p class="classroom-eyebrow">ТАНЫ СУРАЛЦАХ ОРОН ЗАЙ</p><h2 id="entry-heading">Хичээлдээ тавтай морил.</h2><p class="classroom-entry-description">Сургуулийн ID-гаа оруулаад хичээлээ үргэлжлүүлээрэй.</p>
+ <form id="student-entry-form">
+ <label for="student-id">Сурагчийн ID</label>
+ <input id="student-id" name="studentId" placeholder="Жишээ: 8A-01" maxlength="${MAX_TEACHER_NAME_LENGTH}" autocomplete="username" autocapitalize="none" spellcheck="false" required aria-describedby="student-id-error">
+ <div id="lesson-teacher-field" hidden></div>
+ <p id="student-id-error" class="classroom-entry-error" role="alert"></p>
+ <button class="classroom-enter" type="submit">Хичээлд орох ${icon('arrow-right')}</button>
+ <button class="classroom-login-mode" id="lesson-teacher-mode" type="button">Багшаар нэвтрэх</button>
+ </form>
  <div class="classroom-save-note">${icon('check-circle-2')}<div><strong>Эхэлсэн газраасаа үргэлжлүүлнэ</strong><p>Код, ахиц тань хадгалагдана. Өөр компьютер дээр ч өөрийн ID эсвэл нэрээр ороорой.</p></div></div><p class="classroom-id-note">Зөвхөн өөрийн ID эсвэл нэрийг ашиглаарай.</p></section></main>
  <footer class="classroom-entry-footer"><span>Кодоо бич. Турш. Дахин оролд.</span><span>КодЛаб · JavaScript</span></footer></div>`;
+ const form=app.querySelector('#student-entry-form');
+ const mode=form.querySelector('#lesson-teacher-mode');
+ const teacherField=form.querySelector('#lesson-teacher-field');
+ const input=form.querySelector('#student-id');
+ mode.addEventListener('click',()=>{
+  const teacher=teacherField.hidden;
+  teacherField.hidden=!teacher;
+  teacherField.innerHTML=teacher?'<label for="lesson-credential">Багшийн нууц үг</label><input id="lesson-credential" name="password" type="password" autocomplete="current-password" required maxlength="1024">':'';
+  form.querySelector('label[for="student-id"]').textContent=teacher?'Багшийн нэвтрэх нэр эсвэл бүтэн нэр':'Сурагчийн ID';
+  app.querySelector('.classroom-entry-description').textContent=teacher?'Бүртгэлтэй нэр болон нууц үгээ оруулна уу.':'Сургуулийн ID-гаа оруулаад хичээлээ үргэлжлүүлээрэй.';
+  mode.textContent=teacher?'Сурагчаар нэвтрэх':'Багшаар нэвтрэх';
+  input.placeholder=teacher?'':'Жишээ: 8A-01';input.value='';input.removeAttribute('aria-invalid');
+  form.querySelector('#student-id-error').replaceChildren();input.focus();
+ });
  decorate();
 }
 app.addEventListener('submit',async e=>{
  if(e.target.id!=='student-entry-form')return;e.preventDefault();
- const input=document.querySelector('#student-id');
+ const input=e.target.querySelector('#student-id');
+ const mode=e.target.querySelector('#lesson-teacher-mode');
+ const password=e.target.querySelector('#lesson-credential');
  try{
   const button=e.target.querySelector('button[type="submit"]');
   if(button.disabled)return;button.disabled=true;button.textContent="Ахиц ачаалж байна…";input.readOnly=true;e.target.setAttribute("aria-busy","true");
-  const credential=e.target.querySelector("#lesson-credential").value;
-  await enterLesson(input.value,credential,selectCloudStudent);quizResult=null;hint=0;output=[];checks=[];runError='';
+  mode.disabled=true;if(password)password.readOnly=true;
+  await enterLesson(input.value,password?.value,selectCloudStudent);quizResult=null;hint=0;output=[];checks=[];runError='';
   const restored=exercises.find(ex=>ex.id===state.active)||exercises[0];
   if(!location.hash)history.replaceState(null,'',state.attempt?'#/tests':'#/exercises/'+restored.id);
   route();
   if(!storageAvailable)toast('Энэ браузерт хадгалах боломжгүй. Тайлангаа татаж аваарай.');
  }catch(error){
-  const button=e.target.querySelector('button[type="submit"]');button.disabled=false;button.textContent='Хичээлд орох';input.readOnly=false;e.target.setAttribute('aria-busy','false');input.setAttribute('aria-invalid','true');
+  const button=e.target.querySelector('button[type="submit"]');button.disabled=false;button.textContent='Хичээлд орох';input.readOnly=false;mode.disabled=false;if(password)password.readOnly=false;e.target.setAttribute('aria-busy','false');input.setAttribute('aria-invalid','true');
   const message=document.querySelector('#student-id-error');
   message.textContent=error.message==='Invalid student ID'?'Үсэг, тоо, цэг, зураас эсвэл доогуур зураас ашиглаарай.':error.message;
   if(error.status===423){const link=document.createElement('a');link.href='/exam';link.textContent=' Шалгалтаа үргэлжлүүлэх →';message.append(link);}

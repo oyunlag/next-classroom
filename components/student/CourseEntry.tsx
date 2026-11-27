@@ -82,6 +82,7 @@ export default function CourseEntry({
   const backHref = placement?.backHref ?? "/";
   const backLabel = placement?.grade ?? "Хичээл сонгох";
   const [id, setId] = useState("");
+  const [teacher, setTeacher] = useState(false);
   const [credential, setCredential] = useState("");
   const [error, setError] = useState("");
   const [examActive, setExamActive] = useState(false);
@@ -149,7 +150,9 @@ export default function CourseEntry({
           <p className="classroom-eyebrow">ТАНЫ СУРАЛЦАХ ОРОН ЗАЙ</p>
           <h2 id="entry-heading">Хичээлдээ тавтай морил.</h2>
           <p className="classroom-entry-description">
-            Сурагч бол ID-гаа, багш бол бүтэн нэрээ бичээрэй.
+            {teacher
+              ? "Бүртгэлтэй нэр болон нууц үгээ оруулна уу."
+              : "Сургуулийн ID-гаа оруулаад хичээлээ үргэлжлүүлээрэй."}
           </p>
           <form
             aria-busy={busy}
@@ -160,7 +163,11 @@ export default function CourseEntry({
               setError("");
               setExamActive(false);
               try {
-                await enterLesson(id, credential, onLogin);
+                await enterLesson(
+                  id,
+                  teacher ? credential : undefined,
+                  onLogin,
+                );
                 setCredential("");
               } catch (error) {
                 setExamActive(
@@ -184,7 +191,7 @@ export default function CourseEntry({
             }}
           >
             <label htmlFor="student-id">
-              Сурагчийн ID эсвэл багшийн бүтэн нэр
+              {teacher ? "Багшийн нэвтрэх нэр эсвэл бүтэн нэр" : "Сурагчийн ID"}
             </label>
             <input
               ref={input}
@@ -196,35 +203,35 @@ export default function CourseEntry({
               autoComplete="username"
               autoCapitalize="none"
               spellCheck={false}
-              placeholder={`Жишээ: ${info.placeholder}`}
+              placeholder={teacher ? undefined : `Жишээ: ${info.placeholder}`}
               readOnly={busy}
               aria-invalid={!!error}
-              aria-describedby="entry-help entry-error"
+              aria-describedby="entry-error"
               onChange={(event) => {
                 setId(event.target.value.normalize("NFKC"));
                 setError("");
                 setExamActive(false);
               }}
             />
-            <label htmlFor="lesson-credential">
-              Хичээлийн код эсвэл багшийн нууц үг
-            </label>
-            <input
-              id="lesson-credential"
-              type="password"
-              autoComplete="off"
-              required
-              maxLength={1024}
-              value={credential}
-              readOnly={busy}
-              onChange={(event) => {
-                setCredential(event.target.value);
-                setError("");
-              }}
-            />
-            <p id="entry-help" className="classroom-field-help">
-              Сурагч хичээлийн кодоо багшаасаа авна.
-            </p>
+            {teacher && (
+              <>
+                <label htmlFor="lesson-credential">Багшийн нууц үг</label>
+                <input
+                  id="lesson-credential"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  maxLength={1024}
+                  value={credential}
+                  readOnly={busy}
+                  onChange={(event) => {
+                    setCredential(event.target.value);
+                    setError("");
+                  }}
+                />
+              </>
+            )}
             <p id="entry-error" role="alert" className="classroom-entry-error">
               {error}
               {examActive && (
@@ -248,14 +255,29 @@ export default function CourseEntry({
                 </>
               )}
             </button>
+            <button
+              type="button"
+              className="classroom-login-mode"
+              disabled={busy}
+              onClick={() => {
+                setTeacher(!teacher);
+                setId("");
+                setCredential("");
+                setError("");
+                setExamActive(false);
+                input.current?.focus();
+              }}
+            >
+              {teacher ? "Сурагчаар нэвтрэх" : "Багшаар нэвтрэх"}
+            </button>
           </form>
           <div className="classroom-save-note">
             <Cloud size={21} />
             <div>
               <strong>Эхэлсэн газраасаа үргэлжлүүлнэ</strong>
               <p>
-                Код, ахиц тань хадгалагдана. Өөр компьютер дээр ч өөрийн ID
-                болон хичээлийн кодоороо ороорой.
+                Код, ахиц тань хадгалагдана. Өөр компьютер дээр ч өөрийн
+                бүртгэлээр ороорой.
               </p>
             </div>
           </div>

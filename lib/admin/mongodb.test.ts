@@ -23,11 +23,8 @@ import {
   POST as login,
   DELETE as logout,
 } from "../../app/api/admin/session/route";
-import {
-  GET as studentDetail,
-  POST as issueStudentAccess,
-} from "../../app/api/admin/student/route";
-import { lessonSession, studentSession } from "../student/test-session";
+import { GET as studentDetail } from "../../app/api/admin/student/route";
+import { studentSession } from "../student/test-session";
 import { classroomOverview, saveClassroom } from "./classroom-data";
 import { schoolDay } from "../student/classroom";
 import { POST as progress } from "../../app/api/progress/route";
@@ -123,20 +120,7 @@ test(
           teacherIds: ["teacher"],
         })),
       );
-      assert.equal(
-        (
-          await issueStudentAccess(
-            request("/api/admin/student", { studentId: "001" }),
-          )
-        ).status,
-        401,
-      );
-      const issued = await issueStudentAccess(
-        request("/api/admin/student", { studentId: "001" }, cookie),
-      );
-      assert.equal(issued.status, 200);
-      const issuedCode = (await issued.json()).code;
-      learnerTokens.set("001", (await lessonSession("001", issuedCode)).token);
+      learnerTokens.set("001", await studentSession("001"));
       const first = catalog.python[0].id;
       const snapshot = {
         version: 1,
@@ -715,7 +699,7 @@ test(
         creationResponses.every((r) => r.status === 200),
         "Identical concurrent retries are idempotent",
       );
-      learnerTokens.set("20S0999", await studentSession("20S0999", "beta"));
+      learnerTokens.set("20S0999", await studentSession("20S0999"));
       const added = await db
         .collection("student_profiles")
         .findOne({ _id: "20S0999" as never });
@@ -846,7 +830,6 @@ test(
         .findOne({ _id: "20S0999" as never });
       assert.equal(linked?.sourceId, "official-student");
       assert.equal(linked?.manualEnrollment, undefined);
-      assert.equal(linked?.lessonAccessDigest, added.lessonAccessDigest);
       assert.deepEqual(
         await db
           .collection("student_progress")
@@ -897,7 +880,7 @@ test(
         teacherIds: ["beta"],
         notes: "",
       });
-      learnerTokens.set(learnerId, await studentSession(learnerId, "beta"));
+      learnerTokens.set(learnerId, await studentSession(learnerId));
       const sendLesson = (body: Record<string, unknown>) =>
         progress(
           request("/api/progress", {

@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { accountCollection, loginIdentifier } from "../admin/accounts";
 import { allowLogin, authenticateAdmin } from "../admin/auth";
 import { classroomDatabase, studentProfiles } from "./database";
@@ -8,19 +8,15 @@ import { teacherIdByName } from "./registry";
 const digest = (value: string) =>
   createHash("sha256").update(value).digest("hex");
 const tokenPattern = /^[A-Za-z0-9_-]{43}$/;
-const codePattern = /^[a-f0-9]{32}$/i;
 const activeStudent = {
   sourceId: { $type: "string" as const },
   deletedAt: { $exists: false },
 };
 
-type LessonSession = {
-  _id: string;
-  studentId: string;
-  kind: "student" | "teacher";
-  credentialDigest: string;
-  expiresAt: Date;
-};
+type LessonOwner =
+  | { studentId: string; kind: "student" }
+  | { studentId: string; kind: "teacher"; credentialDigest: string };
+type LessonSession = LessonOwner & { _id: string; expiresAt: Date };
 
 let sessionIndex: Promise<string> | undefined;
 
@@ -30,26 +26,10 @@ async function sessions() {
   );
 }
 
-export function createStudentAccess() {
-  const code = randomBytes(16).toString("hex").toUpperCase();
-  return { code, credentialDigest: digest(code) };
-}
-
-export async function resetStudentAccess(studentId: string, teacherId: string) {
-  const { code, credentialDigest } = createStudentAccess();
-  const changed = await (
-    await studentProfiles()
-  ).updateOne(
-    { _id: studentId, teacherIds: teacherId, ...activeStudent },
-    { $set: { lessonAccessDigest: credentialDigest } },
-  );
-  return changed.matchedCount ? code : null;
-}
-
 export async function openLessonSession(
   request: Request,
   identity: string,
-  credential: string,
+  credential?: string,
 ) {
   let id: string | undefined;
   try {
@@ -60,33 +40,13 @@ export async function openLessonSession(
   const student = id
     ? await (
         await studentProfiles()
-      ).findOne(
-        { _id: id, ...activeStudent },
-        { projection: { lessonAccessDigest: 1 } },
-      )
+      ).findOne({ _id: id, ...activeStudent }, { projection: { _id: 1 } })
     : null;
-  let owner: Pick<LessonSession, "studentId" | "kind" | "credentialDigest">;
+  let owner: LessonOwner;
   if (student) {
-    const code = credential.trim();
-    const expected = student.lessonAccessDigest;
-    if (
-      !codePattern.test(code) ||
-      !expected ||
-      !/^[a-f0-9]{64}$/.test(expected) ||
-      !timingSafeEqual(
-        Buffer.from(digest(code.toUpperCase())),
-        Buffer.from(expected),
-      )
-    )
-      return null;
-    owner = {
-      studentId: student._id,
-      kind: "student",
-      credentialDigest: expected,
-    };
+    owner = { studentId: student._id, kind: "student" };
   } else {
-    // Student codes are random 128-bit secrets. Rate-limit teacher password checks independently.
-    if (id && /^\d{2}S\d{4}$/.test(id)) return null;
+    if (!credential || (id && /^\d{2}S\d{4}$/.test(id))) return null;
     if (!(await allowLogin(request, "lesson")))
       throw Response.json(
         { error: "Олон удаа оролдлоо. 15 минутын дараа дахин оролдоорой." },
@@ -160,7 +120,6 @@ export async function lessonIdentity(request: Request, studentId: string) {
     {
       _id: studentId,
       ...activeStudent,
-      lessonAccessDigest: session.credentialDigest,
     },
     { projection: { name: 1, groupId: 1, teacherIds: 1 } },
   );

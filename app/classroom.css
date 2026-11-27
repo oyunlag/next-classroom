@@ -806,3 +806,19 @@ pre ::selection,
   flex-wrap: wrap;
   gap: 0.4rem;
 }
+
+.classroom-login-mode {
+  justify-self: center;
+  padding: 0.35rem 0.5rem;
+  border: 0;
+  background: transparent;
+  color: var(--classroom-accent, #2457db);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+#lesson-teacher-field:not([hidden]) {
+  display: grid;
+  gap: 0.4rem;
+}

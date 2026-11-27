@@ -32,7 +32,6 @@ export type StudentProfile = {
   teacherIds?: string[];
   deletedAt?: Date;
   deletedBy?: string;
-  lessonAccessDigest?: string;
   classroomSince?: string;
   classroomHistory?: ClassroomMembership[];
 };

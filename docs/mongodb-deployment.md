@@ -1,8 +1,8 @@
 # MongoDB student progress and hosting
 
-All four courses authenticate students with their school ID and a teacher-issued lesson access code. The browser holds the resulting session in memory. The server checks the identity, expiry, and current credential on each progress or guidance request. MongoDB stores credential and session digests. The timed exam has its own teacher-issued access code and session.
+All four courses accept a student's registered school ID for lesson entry. The browser holds the resulting session in memory. The server checks its expiry and the student's active roster entry on each progress or guidance request. Anyone who knows an active student's ID can sign in to that student's lesson workspace.
 
-Before rollout, run `npx tsx scripts/provision-lesson-access.ts "<class name>"` to preview missing codes. Add `--apply` to issue codes only for those students, and distribute only the privately saved `confirmed.json` entries to their corresponding students. Teachers can issue or replace individual codes in student details after rollout. Existing course progress remains under the same normalized student IDs. Active teachers use their account password for lesson practice.
+Teachers use their account password for lesson entry. The timed exam uses its own teacher-issued code.
 
 ## Configure
 

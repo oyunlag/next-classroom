@@ -32,9 +32,6 @@ export default function StudentDetail({
 }) {
   const [profileExpanded, setProfileExpanded] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
-  const [accessCode, setAccessCode] = useState("");
-  const [issuingCode, setIssuingCode] = useState(false);
-  const [codeError, setCodeError] = useState("");
   const [name, setName] = useState(student.name),
     [notes, setNotes] = useState(student.notes),
     [groupId, setGroupId] = useState(student.groupId || "");
@@ -103,32 +100,6 @@ export default function StudentDetail({
             <br />
             <strong>{dateLabel(student.updatedAt)}</strong>
           </p>
-          <button
-            type="button"
-            className="admin-secondary"
-            disabled={issuingCode}
-            onClick={async () => {
-              if (!window.confirm("Хичээлийн шинэ код гаргахад өмнөх код болон нэвтрэлт хүчингүй болно. Үргэлжлүүлэх үү?"))
-                return;
-              setIssuingCode(true);
-              setCodeError("");
-              try {
-                const result = await adminRequest<{ code: string }>("/api/admin/student", {
-                  method: "POST",
-                  body: JSON.stringify({ studentId: student.id }),
-                });
-                setAccessCode(result.code);
-              } catch (error) {
-                setCodeError(error instanceof Error ? error.message : "Код гаргаж чадсангүй.");
-              } finally {
-                setIssuingCode(false);
-              }
-            }}
-          >
-            Хичээлийн шинэ код гаргах
-          </button>
-          {accessCode && <p role="status">Зөвхөн тухайн сурагчид өгнө үү. <code>{accessCode}</code></p>}
-          {codeError && <p className="admin-error" role="alert">{codeError}</p>}
           <button
             className="admin-text admin-profile-toggle"
             aria-expanded={profileExpanded}

@@ -14,7 +14,7 @@ export function clearLessonToken() {
 
 export async function enterLesson(
   identity: string,
-  credential: string,
+  credential: string | undefined,
   login: (id: string, token: string) => Promise<unknown>,
 ) {
   const response = await fetch("/api/progress/session", {

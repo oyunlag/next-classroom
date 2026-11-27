@@ -79,6 +79,7 @@ test(
           _id: id as never,
           sourceId: "source-" + id,
           teacherIds: ["fixture-teacher"],
+          ...(id === "002" && { lessonAccessDigest: "a".repeat(64) }),
         })),
       );
       for (const id of ["001", "1", "12", "UNKNOWN"])
@@ -87,8 +88,9 @@ test(
           assert.equal((await call("save", id, course)).status, 401);
         }
       assert.equal(await db.collection("student_progress").countDocuments(), 0);
+      assert.equal((await lessonLoginRequest("not-enrolled")).status, 401);
       for (const id of ["001", "002", "003"])
-        tokens.set(id, await studentSession(id, "fixture-teacher"));
+        tokens.set(id, await studentSession(id));
       for (const action of ["load", "save", "guidance"])
         assert.equal(
           (
@@ -182,6 +184,11 @@ test(
           passwordHash,
         },
       ]);
+      assert.equal((await lessonLoginRequest("orgilsaikhan.ch")).status, 401);
+      assert.equal(
+        (await lessonLoginRequest("orgilsaikhan.ch", "wrong password")).status,
+        401,
+      );
       const teacher = await lessonSession(
         "  ТУРШИЛТЫН   багш  ",
         teacherPassword,
@@ -247,9 +254,11 @@ test(
         (await lessonSession("Туршилтын Багш", teacherPassword)).id,
         "BATZORIG.B",
       );
-      const replacement = await studentSession("003", "fixture-teacher");
+      await db
+        .collection("lesson_sessions")
+        .updateMany({ studentId: "003" }, { $set: { expiresAt: new Date(0) } });
       assert.equal((await call("load", "003")).status, 401);
-      tokens.set("003", replacement);
+      tokens.set("003", await studentSession("003"));
       assert.equal((await call("load", "003")).status, 200);
       for (const action of ["load", "save"])
         assert.equal(

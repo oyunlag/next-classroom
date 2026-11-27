@@ -17,16 +17,22 @@ export async function POST(request: Request) {
       typeof identity !== "string" ||
       !identity.trim() ||
       identity.length > MAX_TEACHER_NAME_LENGTH ||
-      typeof credential !== "string" ||
-      !credential ||
-      credential.length > 1024
+      (credential !== undefined &&
+        (typeof credential !== "string" ||
+          !credential ||
+          credential.length > 1024))
     )
       return json({ error: "Нэвтрэх мэдээллээ шалгана уу." }, 400);
     const session = await openLessonSession(request, identity, credential);
     return session
       ? json(session)
       : json(
-          { error: "Нэвтрэх нэр, хичээлийн код эсвэл нууц үг буруу байна." },
+          {
+            error:
+              credential === undefined
+                ? "Сурагчийн ID бүртгэлгүй эсвэл идэвхгүй байна."
+                : "Нэвтрэх нэр эсвэл нууц үг буруу байна.",
+          },
           401,
         );
   } catch (error) {
