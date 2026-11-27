@@ -1,6 +1,6 @@
 # КодЛаб · Хичээл сонгох
 
-The main page is a Mongolian lesson chooser: HTML & CSS (Grades 6–8) at `/web-lab`, Python (Grades 9–10) at `/python`, JavaScript (Grades 6–8) at `/kodlab`, and Next.js at `/next-classroom`. These courses ask for a student ID and synchronize progress through the MongoDB backend. Each course has a return link to the chooser.
+The main page is a Mongolian lesson chooser: HTML & CSS (Grades 6–8) at `/web-lab`, Python (Grades 9–10) at `/python`, JavaScript (Grades 6–8) at `/kodlab`, and Next.js at `/next-classroom`. Students enter their ID and a private lesson access code issued by their teacher. All four courses synchronize progress through MongoDB. Each course has a return link to the chooser.
 
 Existing Python hash bookmarks such as `/python#/visualize/if` forward to `/python#/visualize/if`. Moving Python keeps its storage keys and saved student work on the same origin. The Next.js course instructions remain in [docs/next-classroom.md](docs/next-classroom.md).
 
@@ -12,7 +12,7 @@ Six lessons cover HTML tags, CSS colors and text, spacing and borders, image sty
 
 The Mongolian JavaScript lab is available at **`/kodlab`**, alongside Python at
 `/python` and the Next.js course at `/next-classroom`. It includes 74 exercises,
-20 knowledge-test questions, the code playground, and separate student profiles in MongoDB. A new student ID starts fresh; the same ID resumes its saved work on another device once database access is configured.
+20 knowledge-test questions, the code playground, and separate student profiles in MongoDB. Students can resume their saved work on another device using the same ID and lesson access code.
 
 The source is in [`apps/kodlab`](apps/kodlab/README.md). Root `npm install` or
 `npm ci` installs its workspace dependencies. Development startup and production
@@ -51,7 +51,7 @@ Share this computer's current local-network address on port 3000. Keep the compu
 - Hints, concept explanations, reference sheets, example solutions, reset confirmation, and `.py` downloads.
 - 21 quiz questions, seven topic quizzes and one combined quiz, saved answers, scoring, explanations, and retries.
 - A free-code area with its own saved code and inputs.
-- Separate MongoDB drafts and progress for each student ID, with a browser fallback copy. Only imported, active student IDs can load/save progress. IDs are classroom identifiers, not authenticated accounts.
+- Separate MongoDB drafts and progress for each student ID, with a browser fallback copy. Active students authenticate with their ID and lesson access code before loading or saving work.
 - Viewed solutions do not count as independent completion. Reset the exercise before solving independently. Editing a completed exercise invalidates its completion until checked again.
 - JSON export of code, progress, and quiz answers. The export is a download. The teacher dashboard at `/admin` shows assigned students, classes, saved work, progress and teacher notes.
 
@@ -83,10 +83,7 @@ The checker is practice feedback, not a secure exam grader. Course data and solu
 ## Validation
 
 ```sh
-npm test
-npm run lint
-npm run typecheck
-npm run build
+npm run verify:release
 ```
 
 The Python tests execute all supplied solutions and samples through the same harness used by the browser worker. They cover multiple inputs, boundary mistakes, hard-coded output, syntax requirements, input failures, output limits, corrupt saved data, and profile-key separation. Animation tests verify branch selection, iteration and check counts, highlighted lines and graph references, and compare final animated output with real Python output. Running these development tests requires `python3`; students do not need it installed.

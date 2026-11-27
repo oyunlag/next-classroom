@@ -1,6 +1,7 @@
 "use client";
 
 import TeacherGuidance from "@/components/student/TeacherGuidance";
+import ConflictActions from "@/components/student/ConflictActions";
 import ProgressSaveButton from "@/components/student/ProgressSaveButton";
 
 import {
@@ -56,7 +57,7 @@ import type {
   RunResult,
   StudentProgress,
 } from "@/lib/python/types";
-import { recoverCloudProgress } from "@/lib/python/state";
+import { downloadProgressConflict, openProgressServerCopy } from "@/lib/python/state";
 import CodeWorkspace, { downloadFile } from "./CodeWorkspace";
 import Dialog from "./Dialog";
 import Quiz from "./Quiz";
@@ -443,21 +444,19 @@ export default function PythonLab({
         </div>
       </header>
       <div className="classroom-save-actions">
-        <ProgressSaveButton onSave={savePythonProgress} />
+        <ProgressSaveButton onSave={savePythonProgress} course="python" studentId={state.student} />
       </div>
       <TeacherGuidance studentId={state.student} course="python" />
       <div
         role="status"
         className="py-storage-warning"
-        data-attention={/хадгалаагүй|боломжгүй|Өөр цонхонд/.test(
+        data-attention={/хадгалаагүй|боломжгүй|Өөр цонхонд|нэвтрэлт дууслаа/.test(
           state.cloudStatus,
         )}
       >
         {state.cloudStatus}
         {state.cloudStatus.includes("Өөр цонхонд") && (
-          <button onClick={recoverCloudProgress}>
-            Ажлаа татаж, серверийн ахицыг ачаалах
-          </button>
+          <ConflictActions onDownload={downloadProgressConflict} onOpenServerCopy={openProgressServerCopy} />
         )}
       </div>
       {!state.saving && (
@@ -919,15 +918,13 @@ export default function PythonLab({
           <div
             role="status"
             className="py-storage-warning"
-            data-attention={/хадгалаагүй|боломжгүй|Өөр цонхонд/.test(
+            data-attention={/хадгалаагүй|боломжгүй|Өөр цонхонд|нэвтрэлт дууслаа/.test(
               state.cloudStatus,
             )}
           >
             {state.cloudStatus}
             {state.cloudStatus.includes("Өөр цонхонд") && (
-              <button onClick={recoverCloudProgress}>
-                Ажлаа татаж, серверийн ахицыг ачаалах
-              </button>
+              <ConflictActions onDownload={downloadProgressConflict} onOpenServerCopy={openProgressServerCopy} />
             )}
           </div>
           {!state.saving && (

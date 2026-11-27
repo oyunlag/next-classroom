@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import CourseEntry from "@/components/student/CourseEntry";
 import { createCloudProgress, messages } from "@/lib/student/cloud";
+import { clearLessonToken } from "@/lib/student/entry";
 import { normalizeStudentId } from "@/lib/student/identity";
 import {
   initialProgress,
@@ -37,9 +38,9 @@ export default function WebLab({ sampleImage }: { sampleImage: string }) {
     return (
       <CourseEntry
         course="htmlcss"
-        onLogin={async (value) => {
+        onLogin={async (value, token) => {
           const id = normalizeStudentId(value);
-          const restored = readProgress(await cloud.load(id, initialProgress));
+          const restored = readProgress(await cloud.load(id, initialProgress, token));
           setProgress(restored);
           cloud.save(restored);
           setStudent(id);
@@ -63,9 +64,11 @@ export default function WebLab({ sampleImage }: { sampleImage: string }) {
       sampleImage={sampleImage}
       onChange={update}
       onSave={cloud.saveNow}
-      onRecover={cloud.recover}
+      onDownloadConflict={cloud.downloadConflict}
+      onOpenServerCopy={cloud.openServerCopy}
       onSwitchStudent={() => {
         cloud.stop();
+        clearLessonToken();
         setStudent("");
         setProgress(initialProgress);
       }}

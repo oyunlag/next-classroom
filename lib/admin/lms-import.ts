@@ -1,4 +1,5 @@
 import { normalizeStudentId } from "../student/identity";
+import { membershipChange } from "../student/membership";
 import { classroomDatabase } from "../student/database";
 import { accountCollection } from "./accounts";
 import { randomBytes } from "node:crypto";
@@ -122,10 +123,7 @@ export function parseLmsImport(value: unknown): LmsImport {
     students: [...students.values()],
   };
 }
-export async function applyLmsImport(
-  plan: LmsImport,
-  recordSetup: (id: string, secret: string) => Promise<void>,
-) {
+async function prepareLmsImport(plan: LmsImport) {
   const { profiles, groups } = await adminCollections(),
     accounts = await accountCollection();
   const [existingGroups, existingProfiles, existingAccounts] =
@@ -147,10 +145,38 @@ export async function applyLmsImport(
       existing ? existing._id : `lms-${group.sourceId}`,
     );
   }
+  const manualLinks: {
+    id: string;
+    name: string;
+    classId: string;
+    lmsSourceId: string;
+  }[] = [];
+  const profileById = new Map(
+    existingProfiles.map((profile) => [profile._id, profile]),
+  );
   for (const student of plan.students) {
-    const existing = existingProfiles.find((p) => p._id === student.id);
-    if (existing?.sourceId && existing.sourceId !== student.sourceId)
-      throw new Error("Student source conflict");
+    const existing = profileById.get(student.id);
+    if (!existing?.sourceId || existing.sourceId === student.sourceId) continue;
+    const classId = classIds.get(student.classSourceId);
+    if (
+      !existing.manualEnrollment ||
+      existing.sourceId !== `manual:${student.id}` ||
+      !classId ||
+      existing.groupId !== classId ||
+      existing.name
+        .normalize("NFKC")
+        .trim()
+        .replace(/\s+/g, " ")
+        .toLowerCase() !==
+        student.name.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase()
+    )
+      throw new Error(`Student source conflict for ${student.id}`);
+    manualLinks.push({
+      id: student.id,
+      name: student.name,
+      classId,
+      lmsSourceId: student.sourceId,
+    });
   }
   for (const teacher of plan.teachers) {
     if (
@@ -162,6 +188,42 @@ export async function applyLmsImport(
     )
       throw new Error("Admin identity conflict");
   }
+  return {
+    profiles,
+    groups,
+    accounts,
+    existingAccounts,
+    classIds,
+    manualLinks,
+    profileById,
+  };
+}
+
+export async function previewLmsImport(plan: LmsImport) {
+  const { manualLinks } = await prepareLmsImport(plan);
+  return { manualLinks };
+}
+
+export async function applyLmsImport(
+  plan: LmsImport,
+  recordSetup: (id: string, secret: string) => Promise<void>,
+  approvedManualLinks: readonly string[] = [],
+) {
+  const {
+    profiles,
+    groups,
+    accounts,
+    existingAccounts,
+    classIds,
+    manualLinks,
+    profileById,
+  } = await prepareLmsImport(plan);
+  const approved = new Set(approvedManualLinks);
+  if (manualLinks.some(({ id }) => !approved.has(id)))
+    throw new Error(
+      "Manual enrollments require explicit --link-manual=<student ID> approval after preview.",
+    );
+  const linking = new Set(manualLinks.map(({ id }) => id));
   await groups.createIndex({ key: 1 }, { unique: true });
   await accounts.createIndex({ email: 1 }, { unique: true });
   for (const group of plan.groups)
@@ -218,22 +280,41 @@ export async function applyLmsImport(
   }
   if (plan.students.length)
     await profiles.bulkWrite(
-      plan.students.map((s) => ({
-        updateOne: {
-          filter: { _id: s.id },
-          update: {
-            $set: {
-              name: s.name,
-              sourceId: s.sourceId,
-              groupId: classIds.get(s.classSourceId)!,
-              teacherIds: s.teacherIds,
-              updatedAt: new Date(),
-            },
-            $setOnInsert: { notes: "" },
+      plan.students.map((s) => {
+        const existing = profileById.get(s.id);
+        const now = new Date();
+        const membership = membershipChange(
+          {
+            name: s.name,
+            sourceId: s.sourceId,
+            groupId: classIds.get(s.classSourceId)!,
+            teacherIds: s.teacherIds,
+            updatedAt: now,
           },
-          upsert: true,
-        },
-      })),
+          now,
+          { link: linking.has(s.id) },
+        );
+        return {
+          updateOne: {
+            filter: {
+              _id: s.id,
+              ...(existing?.sourceId
+                ? { sourceId: existing.sourceId }
+                : { sourceId: { $exists: false } }),
+              ...(linking.has(s.id) && {
+                manualEnrollment: true,
+                name: existing?.name,
+                groupId: existing?.groupId,
+              }),
+            },
+            update: [
+              ...membership,
+              { $set: { notes: { $ifNull: ["$notes", ""] } } },
+            ],
+            upsert: true,
+          },
+        };
+      }),
     );
   const db = await classroomDatabase();
   // Old shared-password sessions have no account identity and cannot authorize requests.

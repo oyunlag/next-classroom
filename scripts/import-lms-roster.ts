@@ -7,8 +7,13 @@ import {
   appendFile,
 } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
+import { normalizeStudentId } from "../lib/student/identity";
 import { classroomDatabase } from "../lib/student/database";
-import { parseLmsImport, applyLmsImport } from "../lib/admin/lms-import";
+import {
+  parseLmsImport,
+  applyLmsImport,
+  previewLmsImport,
+} from "../lib/admin/lms-import";
 import type { MongoClient } from "mongodb";
 loadEnvConfig(process.cwd());
 async function main() {
@@ -23,8 +28,18 @@ async function main() {
       mode: process.argv.includes("--apply") ? "apply" : "dry-run",
     }),
   );
-  if (!process.argv.includes("--apply")) return;
+  const approved = process.argv
+    .slice(3)
+    .filter((arg) => arg.startsWith("--link-manual="))
+    .map((arg) => normalizeStudentId(arg.slice("--link-manual=".length)));
   try {
+    const preview = await previewLmsImport(plan);
+    console.log(JSON.stringify(preview, null, 2));
+    if (!process.argv.includes("--apply")) return;
+    if (preview.manualLinks.some(({ id }) => !approved.includes(id)))
+      throw new Error(
+        "Review the preview and specify --link-manual=<student ID> for each confirmed match.",
+      );
     const db = await classroomDatabase();
     await mkdir("work", { recursive: true });
     const backup = {
@@ -45,8 +60,10 @@ async function main() {
     console.log("Private setup codes: " + setupPath);
     console.log(
       JSON.stringify(
-        await applyLmsImport(plan, (id, secret) =>
-          appendFile(setupPath, `${id}\t${secret}\n`),
+        await applyLmsImport(
+          plan,
+          (id, secret) => appendFile(setupPath, `${id}\t${secret}\n`),
+          approved,
         ),
       ),
     );

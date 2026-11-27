@@ -71,7 +71,7 @@ export default function CourseEntry({
   placement,
 }: {
   course: keyof typeof courses;
-  onLogin: (id: string) => Promise<unknown>;
+  onLogin: (id: string, token: string) => Promise<unknown>;
   features?: readonly string[];
   placement?: {
     grade: string;
@@ -82,6 +82,7 @@ export default function CourseEntry({
   const backHref = placement?.backHref ?? "/";
   const backLabel = placement?.grade ?? "Хичээл сонгох";
   const [id, setId] = useState("");
+  const [credential, setCredential] = useState("");
   const [error, setError] = useState("");
   const [examActive, setExamActive] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -159,7 +160,8 @@ export default function CourseEntry({
               setError("");
               setExamActive(false);
               try {
-                await enterLesson(id, onLogin);
+                await enterLesson(id, credential, onLogin);
+                setCredential("");
               } catch (error) {
                 setExamActive(
                   error instanceof Error &&
@@ -204,8 +206,24 @@ export default function CourseEntry({
                 setExamActive(false);
               }}
             />
+            <label htmlFor="lesson-credential">
+              Хичээлийн код эсвэл багшийн нууц үг
+            </label>
+            <input
+              id="lesson-credential"
+              type="password"
+              autoComplete="off"
+              required
+              maxLength={1024}
+              value={credential}
+              readOnly={busy}
+              onChange={(event) => {
+                setCredential(event.target.value);
+                setError("");
+              }}
+            />
             <p id="entry-help" className="classroom-field-help">
-              Багш бүртгэл дэх овог, нэр эсвэл нэвтрэх нэрээ ашиглаж болно.
+              Сурагч хичээлийн кодоо багшаасаа авна.
             </p>
             <p id="entry-error" role="alert" className="classroom-entry-error">
               {error}
@@ -237,7 +255,7 @@ export default function CourseEntry({
               <strong>Эхэлсэн газраасаа үргэлжлүүлнэ</strong>
               <p>
                 Код, ахиц тань хадгалагдана. Өөр компьютер дээр ч өөрийн ID
-                эсвэл нэрээр ороорой.
+                болон хичээлийн кодоороо ороорой.
               </p>
             </div>
           </div>

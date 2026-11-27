@@ -16,7 +16,15 @@ import {
   InputError,
   requireStudent,
 } from "./data";
-import { catalog, parseProgress, summarize } from "./progress";
+import { classroomScope } from "../student/membership";
+import type { StudentProfile } from "../student/database";
+import {
+  catalog,
+  parseProgress,
+  summarize,
+  summaryFields,
+  summaryFromRecord,
+} from "./progress";
 import {
   supportKinds,
   type ClassroomOverview,
@@ -87,71 +95,147 @@ export async function classroomOverview(
     throw new InputError("Ирц харах өдрөө зөв сонгоно уу.");
   const groupId = await requireGroup(teacherId, input.groupId);
   const { profiles } = await adminCollections();
+  const scope = classroomScope(groupId, teacherId);
+  const current = {
+    groupId,
+    teacherIds: teacherId,
+    deletedAt: { $exists: false },
+    $or: [
+      { classroomSince: { $exists: false } },
+      { classroomSince: { $lte: day } },
+    ],
+  };
+  const historical = {
+    classroomHistory: {
+      $elemMatch: {
+        groupId,
+        teacherIds: teacherId,
+        until: { $gte: day },
+        $or: [{ since: null }, { since: { $lte: day } }],
+      },
+    },
+  };
+  type Member = Pick<
+    StudentProfile,
+    | "_id"
+    | "name"
+    | "groupId"
+    | "teacherIds"
+    | "deletedAt"
+    | "classroomSince"
+    | "classroomHistory"
+  >;
   const [people, target] = await Promise.all([
     profiles
-      .find(
+      .find<Member>(
+        { sourceId: { $type: "string" }, $or: [current, historical] },
         {
-          groupId,
-          teacherIds: teacherId,
-          sourceId: { $type: "string" },
-          deletedAt: { $exists: false },
+          projection: {
+            name: 1,
+            groupId: 1,
+            teacherIds: 1,
+            deletedAt: 1,
+            classroomSince: 1,
+            classroomHistory: 1,
+          },
         },
-        { projection: { _id: 1, name: 1 } },
       )
       .toArray(),
     (await targets()).findOne({ _id: targetKey(teacherId, groupId, course) }),
   ]);
+  const activeAccess = new Set(
+    people
+      .filter(
+        (person) => !person.deletedAt && person.teacherIds?.includes(teacherId),
+      )
+      .map((person) => `${course}:${person._id}`),
+  );
   const ids = { _id: { $in: people.map(({ _id }) => `${course}:${_id}`) } };
-  const collection = await progressCollection();
   const [progress, entries] = await Promise.all([
-    collection
-      .find(ids, {
-        projection: {
-          adminSummary: 1,
-          [`classroomDays.${day}`]: 1,
+    (await progressCollection())
+      .aggregate<{
+        _id: string;
+        adminSummary?: ReturnType<typeof summaryFromRecord>;
+        legacyProgress?: string;
+        classroomDays?: Record<string, DailyActivity<Date>["work"]>;
+        classroomGroupDays?: Record<
+          string,
+          Record<string, DailyActivity<Date>["work"]>
+        >;
+      }>([
+        { $match: ids },
+        {
+          $project: {
+            adminSummary: {
+              $cond: [
+                { $in: ["$_id", [...activeAccess]] },
+                "$adminSummary",
+                "$$REMOVE",
+              ],
+            },
+            legacyProgress: {
+              $cond: [
+                { $in: ["$_id", [...activeAccess]] },
+                summaryFields.legacyProgress,
+                "$$REMOVE",
+              ],
+            },
+            [`classroomDays.${day}`]: 1,
+            [`classroomGroupDays.${day}`]: 1,
+          },
         },
-      })
+      ])
       .toArray(),
     (await courseEntryCollection())
       .find(ids, {
-        projection: { [`days.${day}`]: 1 },
+        projection: { [`days.${day}`]: 1, [`groupDays.${day}`]: 1 },
       })
       .toArray(),
   ]);
-  const legacyIds = progress
-    .filter((doc) => !doc.adminSummary)
-    .map(({ _id }) => _id);
-  const legacy = legacyIds.length
-    ? await collection
-        .find({ _id: { $in: legacyIds } }, { projection: { progressJson: 1 } })
-        .toArray()
-    : [];
-  const recovered = new Map(
-    legacy.map((doc) => [
-      doc._id,
-      summarize(course, parseProgress(doc.progressJson)),
-    ]),
-  );
   const workByStudent = new Map(progress.map((doc) => [doc._id, doc]));
-  const entryByStudent = new Map(
-    entries.map((doc) => [doc._id, doc.days?.[day]]),
-  );
+  const entryByStudent = new Map(entries.map((doc) => [doc._id, doc]));
+
   return {
     day,
     exerciseCount: catalog[course].length,
     target: target?.completed ?? 0,
     students: people
-      .map(({ _id, name }) => {
-        const key = `${course}:${_id}`;
+      .map((person) => {
+        const key = `${course}:${person._id}`;
         const doc = workByStudent.get(key);
+        const entry = entryByStudent.get(key);
+        const history = person.classroomHistory?.find(
+          (item) => (!item.since || item.since <= day) && day <= item.until,
+        );
+        // Legacy activity predates scoped writes. Attribute it to the earliest known assignment for that day.
+        const legacyScope = history
+          ? history.groupId === groupId &&
+            history.teacherIds.includes(teacherId)
+          : person.groupId === groupId &&
+            person.teacherIds?.includes(teacherId);
+        const dayEntries = entry?.groupDays?.[day];
+        const dayWork = doc?.classroomGroupDays?.[day];
+        const work = dayWork
+          ? dayWork[scope]
+          : legacyScope
+            ? doc?.classroomDays?.[day]
+            : undefined;
+        const enteredAt = dayEntries
+          ? dayEntries[scope]
+          : legacyScope
+            ? entry?.days?.[day]
+            : undefined;
+        const canViewWork = activeAccess.has(key);
         return {
-          id: _id,
-          name,
-          summary: doc?.adminSummary ?? recovered.get(key) ?? null,
-          activity: activityDto({
-            enteredAt: entryByStudent.get(key),
-            work: doc?.classroomDays?.[day],
-          }),
+          id: person._id,
+          name:
+            history?.groupId === groupId &&
+            history.teacherIds.includes(teacherId)
+              ? history.name
+              : person.name,
+          canViewWork,
+          summary: doc && canViewWork ? summaryFromRecord(course, doc) : null,
+          activity: activityDto({ enteredAt, work }),
         };
       })
       .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id, "mn")),

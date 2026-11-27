@@ -1,3 +1,4 @@
+import { clearLessonToken } from "../student/entry";
 import { createCloudProgress, messages } from "../student/cloud";
 import { normalizeStudentId } from "../student/identity";
 import { BUTTON, exercises, findExercise, initialExercise } from "./lessons";
@@ -19,12 +20,13 @@ const cloud = createCloudProgress("nextjs", (status) => {
   statusVersion++;
   listeners.forEach((listener) => listener());
 });
-export const recoverCloudProgress = () => cloud.recover();
+export const downloadProgressConflict = () => cloud.downloadConflict();
+export const openProgressServerCopy = () => cloud.openServerCopy();
 export const saveCourseProgress = () => cloud.saveNow();
 export const getCloudVersion = () => statusVersion;
 export const getCloudStatus = () => cloudStatus;
 const studentKey = () => `${STORAGE_KEY}:${studentId}`;
-export async function loginStudent(value: string) {
+export async function loginStudent(value: string, token: string) {
   const id = normalizeStudentId(value);
   let local = initial;
   try {
@@ -32,7 +34,7 @@ export async function loginStudent(value: string) {
       JSON.parse(localStorage.getItem(`${STORAGE_KEY}:${id}`) || "null"),
     );
   } catch {}
-  const remote = await cloud.load(id, local);
+  const remote = await cloud.load(id, local, token);
   studentId = id;
   snapshot = sanitizeProgress(remote);
   listeners.forEach((listener) => listener());
@@ -40,6 +42,7 @@ export async function loginStudent(value: string) {
 }
 export function logoutStudent() {
   cloud.stop();
+  clearLessonToken();
   studentId = "";
   snapshot = initial;
   listeners.forEach((listener) => listener());

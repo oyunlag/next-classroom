@@ -116,6 +116,22 @@ export function summarize(course: Course, value: unknown): CourseSummary {
   };
 }
 
+export const summaryFields = {
+  adminSummary: 1,
+  legacyProgress: {
+    $cond: [{ $ifNull: ["$adminSummary", false] }, "$$REMOVE", "$progressJson"],
+  },
+} as const;
+
+export function summaryFromRecord(
+  course: Course,
+  value: { adminSummary?: CourseSummary; legacyProgress?: string },
+): CourseSummary {
+  return value.adminSummary
+    ? { ...value.adminSummary, total: catalog[course].length }
+    : summarize(course, parseProgress(value.legacyProgress ?? "{}"));
+}
+
 const pythonPlayground = emptyProgress().playground;
 const exercisesByCourse = {
   python: new Map(pythonExercises.map((e) => [e.id, e])),

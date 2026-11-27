@@ -476,33 +476,81 @@ export async function teacherExamRows(
     })
     .sort({ name: 1 })
     .toArray();
-  const saved = await (
-    await examCollections()
-  ).attempts
+  const { attempts } = await examCollections();
+  const ids = students.map((student) => `${EXAM_ID}:${student._id}`);
+  const now = new Date();
+  const due = await attempts
     .find(
-      { examId: EXAM_ID, studentId: { $in: students.map((s) => s._id) } },
+      { _id: { $in: ids }, status: "active", deadline: { $lte: now } },
       { projection: { previousAttempts: 0 } },
     )
+    .sort({ deadline: 1, _id: 1 })
+    .limit(8)
     .toArray();
-  const finalized = await Promise.all(
-    saved.map((a) =>
-      a.status === "active" && a.deadline.getTime() <= Date.now()
-        ? finishAttempt(a, "expired")
-        : a,
-    ),
-  );
-  const byId = new Map(finalized.map((a) => [a.studentId, a]));
+  for (let offset = 0; offset < due.length; offset += 2) {
+    await Promise.all(
+      due.slice(offset, offset + 2).map(async (attempt) => {
+        try {
+          await finishAttempt(attempt, "expired");
+        } catch (error) {
+          // A simultaneous reset has already changed the result the list will read.
+          if (!(error instanceof Response && error.status === 409)) throw error;
+        }
+      }),
+    );
+  }
+  const saved = await attempts
+    .find<
+      Pick<
+        ExamAttempt,
+        | "studentId"
+        | "generation"
+        | "status"
+        | "startedAt"
+        | "deadline"
+        | "submittedAt"
+        | "departures"
+      > & {
+        result?: Pick<
+          NonNullable<ExamAttempt["result"]>,
+          "quizPoints" | "codePoints" | "total"
+        >;
+      }
+    >(
+      { _id: { $in: ids } },
+      {
+        projection: {
+          studentId: 1,
+          generation: 1,
+          status: 1,
+          startedAt: 1,
+          deadline: 1,
+          submittedAt: 1,
+          departures: 1,
+          "result.quizPoints": 1,
+          "result.codePoints": 1,
+          "result.total": 1,
+        },
+      },
+    )
+    .toArray();
+  const byId = new Map(saved.map((attempt) => [attempt.studentId, attempt]));
+  const groupById = new Map(classes.map((group) => [group._id, group]));
   return students.map((s) => {
     const a = byId.get(s._id);
+    const group = s.groupId ? groupById.get(s.groupId) : undefined;
     return {
       studentId: s._id,
       name: s.name,
-      className: classes.find((g) => g._id === s.groupId)?.name || "",
-      grade: classes.find((g) => g._id === s.groupId)?.grade,
+      className: group?.name || "",
+      grade: group?.grade,
       groupId: s.groupId || "",
       generation: a?.generation || 0,
       previousAttempts: a?.generation || 0,
-      status: a?.status || "not-started",
+      status:
+        a?.status === "active" && a.deadline <= now
+          ? "expired"
+          : a?.status || "not-started",
       startedAt: a?.startedAt.toISOString() || null,
       submittedAt: a?.submittedAt?.toISOString() || null,
       departures: a?.departures || 0,

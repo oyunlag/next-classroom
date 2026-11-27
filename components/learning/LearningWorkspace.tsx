@@ -1,6 +1,7 @@
 "use client";
 
 import TeacherGuidance from "@/components/student/TeacherGuidance";
+import ConflictActions from "@/components/student/ConflictActions";
 import ProgressSaveButton from "@/components/student/ProgressSaveButton";
 
 import dynamic from "next/dynamic";
@@ -26,7 +27,8 @@ import {
   canSave,
   getCloudVersion,
   getCloudStatus,
-  recoverCloudProgress,
+  downloadProgressConflict,
+  openProgressServerCopy,
   saveCourseProgress,
   getDraft,
   getProgress,
@@ -76,7 +78,7 @@ export default function LearningWorkspace({
   const [solutionConfirm, setSolutionConfirm] = useState(false);
   const completed = progress.completed.includes(exercise.id);
   const cloudStatus = getCloudStatus();
-  const syncAttention = /хадгалаагүй|боломжгүй|Өөр цонхонд/.test(cloudStatus);
+  const syncAttention = /хадгалаагүй|боломжгүй|Өөр цонхонд|нэвтрэлт дууслаа/.test(cloudStatus);
   const lessonHeading = useRef<HTMLHeadingElement>(null);
 
   function select(id: string) {
@@ -277,7 +279,7 @@ export default function LearningWorkspace({
         </div>
       </header>
       <div className="classroom-save-actions">
-        <ProgressSaveButton onSave={saveCourseProgress} />
+        <ProgressSaveButton onSave={saveCourseProgress} course="nextjs" studentId={student} />
       </div>
       <TeacherGuidance studentId={student} course="nextjs" />
       <div
@@ -290,9 +292,7 @@ export default function LearningWorkspace({
       {cloudStatus.includes("Өөр цонхонд") && (
         <div className="classroom-sync-alert" role="alert">
           <p>{cloudStatus}</p>
-          <button onClick={recoverCloudProgress}>
-            Ажлаа татаж, серверийн ахицыг ачаалах
-          </button>
+          <ConflictActions onDownload={downloadProgressConflict} onOpenServerCopy={openProgressServerCopy} />
         </div>
       )}
       <div className="app-body">

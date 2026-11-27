@@ -8,6 +8,7 @@ export type ClassroomOverview = {
   students: {
     id: string;
     name: string;
+    canViewWork: boolean;
     summary: CourseSummary | null;
     activity: DailyActivity;
   }[];

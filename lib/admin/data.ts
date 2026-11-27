@@ -1,22 +1,22 @@
 import { accountCollection } from "./accounts";
 import { randomUUID } from "node:crypto";
-import { classroomDatabase, progressCollection } from "../student/database";
+import {
+  classroomDatabase,
+  progressCollection,
+  studentProfiles,
+} from "../student/database";
+import { schoolDay } from "../student/classroom";
+import { membershipChange } from "../student/membership";
 import { normalizeStudentId, courses, type Course } from "../student/identity";
-import { catalog, detail, parseProgress, summarize } from "./progress";
-import type { Roster, StudentRow } from "./types";
+import {
+  detail,
+  parseProgress,
+  summarize,
+  summaryFromRecord,
+  summaryFields,
+} from "./progress";
+import type { CourseSummary, Roster, StudentRow } from "./types";
 
-type Profile = {
-  _id: string;
-  name: string;
-  notes: string;
-  groupId: string | null;
-  updatedAt: Date;
-  sourceId?: string;
-  manualEnrollment?: boolean;
-  teacherIds?: string[];
-  deletedAt?: Date;
-  deletedBy?: string;
-};
 type ClassGroup = {
   _id: string;
   name: string;
@@ -29,7 +29,7 @@ type ClassGroup = {
 export async function adminCollections() {
   const db = await classroomDatabase();
   return {
-    profiles: db.collection<Profile>("student_profiles"),
+    profiles: await studentProfiles(),
     groups: db.collection<ClassGroup>("student_groups"),
   };
 }
@@ -59,18 +59,47 @@ export async function roster(teacherId: string): Promise<Roster> {
     .toArray();
   const [saved, classes, teachers] = await Promise.all([
     collection
-      .find(
-        { studentId: { $in: people.map((p) => p._id) } },
+      .aggregate<{
+        studentId: string;
+        course: string;
+        lastWorkAt?: Date;
+        adminSummary?: CourseSummary;
+        legacyProgress?: string;
+      }>([
         {
-          projection: {
-            studentId: 1,
-            course: 1,
-            updatedAt: 1,
-            adminSummary: 1,
+          $match: {
+            _id: {
+              $in: people.flatMap((person) =>
+                courses.map((course) => `${course}:${person._id}`),
+              ),
+            },
           },
         },
-      )
-      .limit(10001)
+        { $limit: 10001 },
+        {
+          $project: {
+            studentId: 1,
+            course: 1,
+            ...summaryFields,
+            lastWorkAt: {
+              $ifNull: [
+                "$lastWorkAt",
+                {
+                  $max: {
+                    $map: {
+                      input: {
+                        $objectToArray: { $ifNull: ["$classroomDays", {}] },
+                      },
+                      as: "day",
+                      in: "$$day.v.savedAt",
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      ])
       .toArray(),
     groups
       .find({ teacherIds: teacherId })
@@ -108,24 +137,12 @@ export async function roster(teacherId: string): Promise<Roster> {
       teacherIds: [teacherId],
     });
   for (const p of saved) {
-    if (!courses.includes(p.course as Course)) continue;
+    const course = courses.find((course) => course === p.course);
+    if (!course) continue;
     const row = get(p.studentId);
-    const course = p.course as Course;
-    row.courses[course] = p.adminSummary
-      ? {
-          ...p.adminSummary,
-          total: catalog[course].length,
-        }
-      : {
-          completed: 0,
-          total: catalog[course].length,
-          attempted: 0,
-          assisted: 0,
-          active: "",
-          quizzes: [],
-        };
+    row.courses[course] = summaryFromRecord(course, p);
     const timestamp =
-      p.updatedAt instanceof Date ? p.updatedAt.toISOString() : null;
+      p.lastWorkAt instanceof Date ? p.lastWorkAt.toISOString() : null;
     if (timestamp && (!row.updatedAt || timestamp > row.updatedAt))
       row.updatedAt = timestamp;
   }
@@ -207,6 +224,7 @@ export async function mutate(body: Record<string, unknown>, teacherId: string) {
         manualEnrollment: true,
         teacherIds: [teacherId],
         updatedAt: new Date(),
+        classroomSince: schoolDay(new Date()),
       });
     } catch (error) {
       if (
@@ -243,13 +261,17 @@ export async function mutate(body: Record<string, unknown>, teacherId: string) {
     if (body.action === "delete") {
       await requireStudent(id, teacherId);
       await profiles.updateOne(
-        { _id: id, teacherIds: teacherId },
-        { $set: { deletedAt: new Date(), deletedBy: teacherId } },
+        { _id: id, teacherIds: teacherId, deletedAt: { $exists: false } },
+        membershipChange(
+          { deletedAt: new Date(), deletedBy: teacherId },
+          new Date(),
+          { archive: true },
+        ),
       );
     } else {
       const result = await profiles.updateOne(
         { _id: id, teacherIds: teacherId, deletedBy: teacherId },
-        { $unset: { deletedAt: "", deletedBy: "" } },
+        membershipChange({}, new Date(), { restore: true }),
       );
       if (!result.matchedCount)
         throw new AccessError("Энэ сурагчид хандах эрхгүй байна.");
@@ -300,8 +322,11 @@ export async function mutate(body: Record<string, unknown>, teacherId: string) {
         notes = string(body.notes, 1000);
       await requireStudent(id, teacherId);
       await profiles.updateOne(
-        { _id: id, teacherIds: teacherId },
-        { $set: { name, notes, groupId, updatedAt: new Date() } },
+        { _id: id, teacherIds: teacherId, deletedAt: { $exists: false } },
+        membershipChange(
+          { name, notes, groupId, updatedAt: new Date() },
+          new Date(),
+        ),
       );
     } else {
       if (
@@ -327,9 +352,10 @@ export async function mutate(body: Record<string, unknown>, teacherId: string) {
               teacherIds: teacherId,
               deletedAt: { $exists: false },
             },
-            update: {
-              $set: { groupId, updatedAt: new Date() },
-            },
+            update: membershipChange(
+              { groupId, updatedAt: new Date() },
+              new Date(),
+            ),
           },
         })),
       );

@@ -1,7 +1,8 @@
-import { registeredLearnerKind, teacherIdByName } from "@/lib/student/registry";
+import { lessonIdentity } from "@/lib/student/access";
 import { studentExamActive } from "@/lib/exam/access";
 import { hasWorkChange, parseProgress, summarize } from "@/lib/admin/progress";
 import { studentGuidance } from "@/lib/admin/classroom-data";
+import { classroomScopes } from "@/lib/student/membership";
 import { schoolDay } from "@/lib/student/classroom";
 import { readJsonObject, sameOrigin } from "@/lib/http/request";
 import {
@@ -29,13 +30,16 @@ export async function POST(request: Request) {
     return json({ error: "Invalid request" }, 400);
   }
   try {
-    if (body.action === "resolve-teacher") {
-      const id = await teacherIdByName(body.name);
-      return id
-        ? json({ id })
-        : json({ error: "Teacher name not found or ambiguous" }, 403);
-    }
     const { course, studentId } = body;
+    const learner = await lessonIdentity(request, studentId);
+    if (!learner)
+      return json(
+        {
+          code: "lesson_session_required",
+          error: "Хичээлд дахин нэвтэрнэ үү.",
+        },
+        401,
+      );
     if (await studentExamActive(studentId))
       return json(
         {
@@ -44,37 +48,38 @@ export async function POST(request: Request) {
         },
         423,
       );
-    const learner = await registeredLearnerKind(studentId);
-    if (!learner)
-      return json(
-        {
-          code: "student_not_registered",
-          error:
-            "Сурагчийн ID эсвэл багшийн нэвтрэх нэр бүртгэлгүй эсвэл идэвхгүй байна.",
-        },
-        403,
-      );
     if (body.action === "guidance")
       return json({
         guidance:
-          learner === "student" ? await studentGuidance(studentId, course) : [],
+          learner.kind === "student"
+            ? await studentGuidance(studentId, course)
+            : [],
       });
     const collection = await progressCollection();
     const _id = `${course}:${studentId}`;
     const now = new Date();
     const day = schoolDay(now);
+    const scopes =
+      learner.kind === "student" ? classroomScopes(learner.profile) : [];
     if (body.action === "load") {
       const doc = await collection.findOne(
         { _id },
         { projection: { progressJson: 1, revision: 1 } },
       );
       const progress = doc ? JSON.parse(doc.progressJson) : null;
-      if (learner === "student")
+      if (learner.kind === "student")
         await (
           await courseEntryCollection()
         ).updateOne(
           { _id },
-          { $min: { [`days.${day}`]: now } },
+          {
+            $min: {
+              [`days.${day}`]: now,
+              ...Object.fromEntries(
+                scopes.map((scope) => [`groupDays.${day}.${scope}`, now]),
+              ),
+            },
+          },
           { upsert: true },
         );
       return json({
@@ -85,19 +90,25 @@ export async function POST(request: Request) {
     const { revision } = body;
     const summary = summarize(course, body.progress);
     const previous =
-      learner === "student"
+      learner.kind === "student"
         ? await collection.findOne(
             { _id, revision },
             { projection: { progressJson: 1 } },
           )
         : null;
     const worked =
-      learner === "student" &&
+      learner.kind === "student" &&
       hasWorkChange(
         course,
         parseProgress(previous?.progressJson || "{}"),
         body.progress,
       );
+    const dailyWork = {
+      savedAt: now,
+      completed: summary.completed,
+      attempted: summary.attempted,
+      assisted: summary.assisted,
+    };
     const result = await collection.updateOne(
       { _id, revision },
       {
@@ -109,12 +120,14 @@ export async function POST(request: Request) {
           adminSummary: summary,
           adminSummaryRevision: revision + 1,
           ...(worked && {
-            [`classroomDays.${day}`]: {
-              savedAt: now,
-              completed: summary.completed,
-              attempted: summary.attempted,
-              assisted: summary.assisted,
-            },
+            lastWorkAt: now,
+            [`classroomDays.${day}`]: dailyWork,
+            ...Object.fromEntries(
+              scopes.map((scope) => [
+                `classroomGroupDays.${day}.${scope}`,
+                dailyWork,
+              ]),
+            ),
           }),
         },
         $inc: { revision: 1 },

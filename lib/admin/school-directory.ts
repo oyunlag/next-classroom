@@ -2,7 +2,7 @@ import { courses } from "../student/identity";
 import { progressCollection } from "../student/database";
 import { accountCollection, loginIdentifier } from "./accounts";
 import { AccessError, adminCollections, InputError } from "./data";
-import { catalog, parseProgress, summarize } from "./progress";
+import { catalog, summaryFields, summaryFromRecord } from "./progress";
 import type { SchoolDirectory } from "./school-directory-types";
 
 export function canViewSchoolDirectory(accountId: string) {
@@ -42,30 +42,15 @@ export async function schoolDirectory(
   )
     .aggregate<{
       _id: string;
-      adminSummary?: ReturnType<typeof summarize>;
+      adminSummary?: ReturnType<typeof summaryFromRecord>;
       legacyProgress?: string;
     }>([
       { $match: { _id: { $in: people.map(({ _id }) => `${course}:${_id}`) } } },
-      {
-        $project: {
-          adminSummary: 1,
-          legacyProgress: {
-            $cond: [
-              { $ifNull: ["$adminSummary", false] },
-              "$$REMOVE",
-              "$progressJson",
-            ],
-          },
-        },
-      },
+      { $project: summaryFields },
     ])
     .toArray();
   const summaries = new Map(
-    saved.map((doc) => [
-      doc._id,
-      doc.adminSummary ??
-        summarize(course, parseProgress(doc.legacyProgress ?? "{}")),
-    ]),
+    saved.map((doc) => [doc._id, summaryFromRecord(course, doc)]),
   );
   const validClass = new Set(classrooms.map(({ _id }) => _id));
   return {

@@ -36,6 +36,7 @@ import { hashPassword, createAdminSession, ADMIN_COOKIE } from "../admin/auth";
 import { accountCollection } from "../admin/accounts";
 import { classroomDatabase } from "../student/database";
 import { proxy } from "../../proxy";
+import { studentSession } from "../student/test-session";
 import { POST as progress } from "../../app/api/progress/route";
 import { POST as adminExamReset } from "../../app/api/admin/exam/route";
 
@@ -223,12 +224,16 @@ test(
         ).headers.get("x-middleware-next"),
         "1",
       );
+      const learnerToken = await studentSession("STUDENT8", "teacher1");
       assert.equal(
         (
           await progress(
             new Request("https://example.test/api/progress", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${learnerToken}`,
+              },
               body: JSON.stringify({
                 action: "load",
                 studentId: "STUDENT8",
@@ -428,11 +433,15 @@ test(
           completed: ["name"],
           drafts: { name: 'let name = "Билгүүн"; console.log(name);' },
         };
+        const lessonToken = await studentSession(studentId, "teacher1");
         const lessonRequest = (action: string) =>
           progress(
             new Request("https://example.test/api/progress", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${lessonToken}`,
+              },
               body: JSON.stringify({
                 action,
                 studentId: studentId.toLowerCase(),
@@ -979,6 +988,46 @@ test(
         fullAnswers,
         "All late answers remain in a recovery copy without rewriting the official result",
       );
+      const cohort = Array.from({ length: 9 }, (_, i) => "BATCH" + i);
+      const pastDeadline = new Date(Date.now() - 1000);
+      await db.collection("student_groups").insertOne({
+        _id: "batch-class" as never,
+        name: "Exam batch",
+        grade: 7,
+        teacherIds: ["batch-teacher"],
+      });
+      await profiles.insertMany(
+        cohort.map((id) => ({
+          _id: id,
+          name: id,
+          groupId: "batch-class",
+          sourceId: id,
+          teacherIds: ["batch-teacher"],
+        })),
+      );
+      await attempts.insertMany(
+        cohort.map((id) => ({
+          _id: `${EXAM_ID}:${id}`,
+          examId: EXAM_ID,
+          studentId: id,
+          name: id,
+          groupId: "batch-class",
+          className: "Exam batch",
+          status: "active",
+          startedAt: new Date(pastDeadline.getTime() - 35 * 60_000),
+          deadline: pastDeadline,
+          answers: { choices: {}, code: {} },
+          revision: 0,
+          departures: 0,
+        })),
+      );
+      const firstPoll = await teacherExamRows("batch-teacher");
+      assert.equal(firstPoll.length, cohort.length);
+      assert.equal(firstPoll.filter((row) => row.total !== null).length, 8);
+      assert.ok(firstPoll.every((row) => row.status === "expired"));
+      assert.ok(firstPoll.every((row) => !("answers" in row)));
+      const secondPoll = await teacherExamRows("batch-teacher");
+      assert.ok(secondPoll.every((row) => row.total === 0));
     } finally {
       const pool = globalThis as typeof globalThis & {
         classroomMongo?: Promise<MongoClient>;

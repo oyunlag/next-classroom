@@ -4,8 +4,8 @@ Production: https://kodlab-two.vercel.app/admin
 
 ## Хичээлийн хяналт
 
-- **Хичээлийн хяналт** хэсгээс анги, хичээл, өдрөө сонгоно. Улаанбаатарын цагаар нэг өдөрт тухайн хичээлд ID-гаар нэвтэрч, ажлын өөрчлөлтөө серверт хадгалбал **Оролцсон** гэж харагдана. Зөвхөн нэвтэрсэн, зөвхөн ажил хадгалсан болон бүртгэлгүй сурагчдыг тусад нь харуулна. Хуудас солих, өөрчлөлтгүй эх загвар хадгалах нь ажлын өөрчлөлтөд орохгүй.
-- Өдөр тутмын бүртгэл энэ боломжийг ашиглаж эхэлснээс хойш үүснэ. Өмнөх хадгалсан ажил одоогийн ахицад орно. Бүртгэлгүй өдөр нь цахим оролцооны баримт байхгүйг илэрхийлнэ. Сонгосон өдрийн оролцооны тайланг CSV-ээр татаж болно.
+- **Хичээлийн хяналт** хэсгээс анги, хичээл, өдрөө сонгоно. Улаанбаатарын цагаар нэг өдөрт тухайн хичээлд ID болон хичээлийн кодоор нэвтэрч, ажлын өөрчлөлтөө серверт хадгалбал **Оролцсон** гэж харагдана. Зөвхөн нэвтэрсэн, зөвхөн ажил хадгалсан болон бүртгэлгүй сурагчдыг тусад нь харуулна. Хуудас солих, өөрчлөлтгүй эх загвар хадгалах нь ажлын өөрчлөлтөд орохгүй.
+- Өдөр тутмын бүртгэл энэ боломжийг ашиглаж эхэлснээс хойш үүснэ. Өмнөх хадгалсан ажил одоогийн ахицад орно. Бүртгэлгүй өдөр нь цахим оролцооны баримт байхгүйг илэрхийлнэ. Сонгосон өдрийн оролцооны тайланг CSV-ээр татаж болно. Анги солиход өмнөх өдрийн бүртгэл тухайн үеийн ангид үлдэнэ. Шинэчлэлээс өмнөх бүртгэлд тухайн үед хадгалсан ангийн мэдээлэл дутуу байж болно.
 - **Ангийн ахицын зорилт** хэсэгт одоогоор хэдэн дасгалыг бие дааж бодсон байхыг заана. **Дэмжлэг шаардлагатай** шүүлт зорилтод хүрээгүй сурагчдыг харуулна. Зорилтоо арилгахдаа 0 хадгална. Зорилт нь багш, анги, хичээл бүрээр хадгалагдана.
 - **Дэмжлэг** хэсэгт өгсөн арга хэмжээ, хувийн тэмдэглэл, сурагчид хүргэх нэмэлт зааврыг бичнэ. Сурагч зааврыг тухайн хичээл доторх **Багшийн заавар** хэсгээс уншина. Хувийн тэмдэглэл сурагчид харагдахгүй.
 - Дэмжлэгийн түүхэнд тухайн үед бие даан бодсон дасгалын тоо хадгалагдана. Ахицын түүхэнд сүүлийн 30 ажилласан өдрийн гүйцэтгэл харагдана. **Хадгалсан ажил** хэсгээс код, дасгал, сорилын үр дүнг шалгаж болно. Эдгээр нь ажиглалтын маягтын A2–A4, 8–10-р асуултад ашиглах баримт болно.
@@ -20,21 +20,21 @@ Production: https://kodlab-two.vercel.app/admin
 
 - Багш бүр өөрийн нэвтрэх нэр эсвэл сургуулийн имэйл, нууц үгээр нэвтэрнэ. Нэвтрэлт 8 цаг хүчинтэй; «Гарах» товч тухайн нэвтрэлтийг хүчингүй болгоно.
 - Сурагч ижил ID-гаар Python, JavaScript, Next.js хичээлд ажиллахад нэг сурагчийн гурван ахиц болж харагдана. ID нь сурагчийг таних түлхүүр; өөр ID-уудыг автоматаар нэгтгэхгүй.
-- Зөвхөн импортолсон, идэвхтэй сурагчийн ID хичээлд орох, ахиц унших/хадгалах боломжтой. ID-гаар хуваарилах нь шинэ сурагч үүсгэхгүй.
-- Идэвхтэй багш HTML & CSS, Python, JavaScript, Next.js хичээлд бүртгэл дэх овог, нэрээ эсвэл `orgilsaikhan.ch` зэрэг нэвтрэх нэрээ бичиж орно. Том, жижиг үсэг ялгахгүй. Нэр давхцвал нэвтрэх нэрээ ашиглана. Аль алинаар нь ороход өмнөх дадлагын ахиц хэвээр байна. Хичээлд нэрээр орох нь багшийн орчинд нэвтрэх эрх өгөхгүй; `/admin` хэсэг нууц үгээ шаардана. Шалгалт зөвхөн бүртгэлтэй сурагчдад нээлттэй хэвээр.
+- Идэвхтэй сурагч өөрийн ID болон багшийн олгосон хичээлийн кодоор нэвтэрч, ажлаа уншиж хадгална. Кодыг сурагчийн дэлгэрэнгүй дэх **Хичээлийн шинэ код гаргах** товчоор гаргаж, тухайн сурагчид хувиараа өгнө. Шинэ код гаргахад өмнөх код болон нэвтрэлт хүчингүй болно.
+- Идэвхтэй багш HTML & CSS, Python, JavaScript, Next.js хичээлд бүртгэл дэх овог, нэрээ эсвэл `orgilsaikhan.ch` зэрэг нэвтрэх нэрээ хувийн нууц үгийн хамт бичиж орно. Том, жижиг үсэг ялгахгүй. Нэр давхцвал нэвтрэх нэрээ ашиглана. Аль алинаар нь ороход өмнөх дадлагын ахиц хэвээр байна. Хичээлийн нэвтрэлт болон багшийн орчны нэвтрэлт тусдаа. `/admin` хэсэг нууц үгээ шаардана. Шалгалт зөвхөн бүртгэлтэй сурагчдад нээлттэй хэвээр.
 - Нэг сурагч нэг ангид харьяалагдана. Өөрийн нэмэлт анги үүсгэх, нэр солих, сурагчдыг олноор нь хуваарилах эсвэл ангийг нь солих боломжтой.
 - Сурагчийн дэлгэрэнгүйд нэр, анги, багшийн тэмдэглэлээ хадгална. Тэмдэглэл сурагчдад харагдахгүй. Сурагчийн код, ахицад өөрчлөлт хийхгүй.
 - Дасгалын дууссан/жишээ үзсэн/эхэлсэн төлөв, хадгалсан код, Next.js хариултууд, Python ба JavaScript сорилын үр дүн, чөлөөт кодыг харж болно.
-- Ахиц нь сурагчийн хадгалсан шалгалтын үр дүн; дахин үнэлсэн эсвэл багшаар баталгаажсан дүн биш. «Сүүлд хадгалсан» нь хамгийн сүүлийн өөрчлөлтийн хугацаа; зөвхөн нэвтэрсэн цаг биш.
+- Ахиц нь сурагчийн хадгалсан шалгалтын үр дүн; дахин үнэлсэн эсвэл багшаар баталгаажсан дүн биш. «Сүүлд хадгалсан» нь ажилд гарсан хамгийн сүүлийн хадгалсан өөрчлөлтийн цаг. Хичээл солих болон нэвтрэх үйлдэл энэ цагийг шинэчлэхгүй.
 - Жагсаалт харагдаж байх үед минут тутам шинэчлэгдэнэ. CSV нь тухайн хайлт, шүүлтэд таарсан сурагчдыг экспортолно.
 
 ## LMS import and accounts
 
-Dry run: `npx tsx scripts/import-lms-roster.ts /absolute/path/roster.json`. Apply: add `--apply`. The importer validates the entire source first, backs up existing groups/profiles/accounts to an owner-readable ignored `work/` file, merges by stable source IDs/student codes, and preserves exercise progress and teacher notes. Reruns preserve passwords that teachers have chosen. No source JSON or student roster is copied into deployable assets.
+Run `npx tsx scripts/import-lms-roster.ts /absolute/path/roster.json` for a database-backed preview. After reviewing the matching name, class, and LMS record, add `--apply` and one `--link-manual=<student ID>` for each confirmed manual enrollment. The importer validates the entire source first, backs up existing groups/profiles/accounts to an owner-readable ignored `work/` file, merges by stable source IDs/student codes, and preserves exercise progress and teacher notes. Reruns preserve passwords that teachers have chosen. No source JSON or student roster is copied into deployable assets.
 
 Only student codes, display names, class membership, teacher relationships and source IDs are retained for students. Classes retain name, grade and teacher relationships. Teachers retain username, name and school email. Gender, student email, course content, departments, and extra status/enrollment fields are omitted.
 
-Accounts with `setupRequired: true` can enter their school email as the temporary password at `/admin`, then must choose a new password of at least 12 characters before receiving an admin session. Saving the new password removes `setupRequired`, so the email stops working as a temporary password. An email cannot be chosen as the new password. This email-based setup is the school administrator's requested onboarding flow.
+Accounts with `setupRequired: true` must use their private setup code and choose a password with at least 12 characters before receiving an admin session. After setup, the code expires and the new password is required.
 
 The importer also generates an individual one-time setup code for each new teacher and for each existing account whose stored password still equals its email. It writes codes to an owner-readable file in the ignored `work/` directory before updating the corresponding accounts. The import prints the file path. These codes remain usable for setup. Re-importing preserves passwords that teachers have already chosen. On rollout, re-run the importer with the current roster to provision legacy accounts. Earlier admin sessions require a fresh login.
 
@@ -56,7 +56,7 @@ The roster opens with recently saved work first. Search, class selection, course
 
 The sidebar folds into a class menu on phones, and table rows become student cards with all three course summaries. Profile editing is collapsed on smaller screens so the saved work is reached first. Delete uses the dashboard's own named confirmation dialog and provides a Restore action; it does not use a browser confirmation popup.
 
-The existing Vercel project, production domain and server-only environment settings now belong to **orgils-projects-610af89c**. Deploy with `vercel deploy --prod --yes --scope orgils-projects-610af89c` after checking `vercel whoami --format json`. The live hostname stays https://kodlab-two.vercel.app.
+The existing Vercel project, production domain and server-only environment settings now belong to **orgils-projects-610af89c**. Run `npm run verify:release` with MongoDB installed before deploying. Deploy with `vercel deploy --prod --yes --scope orgils-projects-610af89c` after checking `vercel whoami --format json`. The live hostname stays https://kodlab-two.vercel.app.
 
 ## Teacher-managed student enrollment
 

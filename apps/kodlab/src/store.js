@@ -1,3 +1,4 @@
+import { clearLessonToken } from "../../../lib/student/entry.ts";
 import { exercises, quizzes, questions, playgroundStarter } from "./content.js";
 import { createCloudProgress, messages } from "../../../lib/student/cloud.ts";
 // Active identity stays in memory: every page opening asks who is using the computer.
@@ -23,15 +24,16 @@ const cloud = createCloudProgress("javascript", (status) => {
   if (typeof window !== "undefined")
     window.dispatchEvent(new Event("kodlab-cloud"));
 });
-export const recoverCloudProgress = () => cloud.recover();
+export const downloadProgressConflict = () => cloud.downloadConflict();
+export const openProgressServerCopy = () => cloud.openServerCopy();
 export const saveCloudProgress = () => cloud.saveNow();
-export async function selectCloudStudent(value) {
+export async function selectCloudStudent(value, token) {
   const id = normalizeStudentId(value);
   let local = null;
   try {
     local = JSON.parse(localStorage.getItem(profileKey(id)) || "null");
   } catch {}
-  const remote = await cloud.load(id, restore(local));
+  const remote = await cloud.load(id, restore(local), token);
   studentId = id;
   cloudActive = true;
   replaceState(restore(remote));
@@ -174,6 +176,7 @@ export function save() {
 export function signOutStudent() {
   if (studentId) save();
   cloud.stop();
+  clearLessonToken();
   cloudActive = false;
   studentId = "";
   replaceState(blank());

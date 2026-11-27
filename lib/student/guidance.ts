@@ -1,3 +1,4 @@
+import { lessonToken } from "./entry";
 import { timeoutSignal } from "../http/timeout";
 import { schoolTimeZone, type Guidance } from "./classroom";
 import type { Course } from "./identity";
@@ -21,12 +22,13 @@ export function watchGuidance(
   let loading = false;
   let displayed = "";
   async function refresh() {
-    if (loading || document.visibilityState !== "visible") return;
+    const token = lessonToken(studentId);
+    if (!token || loading || document.visibilityState !== "visible") return;
     loading = true;
     try {
       const response = await fetch("/api/progress", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ action: "guidance", studentId, course }),
         signal: timeoutSignal(12000),
       });

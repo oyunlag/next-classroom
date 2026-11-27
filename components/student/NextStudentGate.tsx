@@ -19,7 +19,7 @@ export default function NextStudentGate() {
   return (
     <CourseEntry
       course="nextjs"
-      onLogin={async (id) => setStudent(await loginStudent(id))}
+      onLogin={async (id, token) => setStudent(await loginStudent(id, token))}
     />
   );
 }

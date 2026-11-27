@@ -3,9 +3,10 @@ import {keymap} from '@codemirror/view';
 import {javascript} from '@codemirror/lang-javascript';
 import {createIcons,Code2,Play,Check,CheckCheck,ChevronDown,ChevronRight,ChevronLeft,ArrowRight,ArrowLeft,Lightbulb,RotateCcw,Terminal,BookOpen,ClipboardCheck,FlaskConical,BarChart3,Menu,X,Download,CheckCircle2,Clock,AlertCircle,ExternalLink,Trash2,Send,Flag,Square,HelpCircle,Trophy} from 'lucide';
 import {courseGradeLabel,topics,exercises,quizzes,questions,playgroundStarter} from './content.js';
-import {state,save,storageAvailable,studentId,selectCloudStudent,signOutStudent,cloudStatus,recoverCloudProgress,saveCloudProgress} from './store.js';
+import {state,save,storageAvailable,studentId,selectCloudStudent,signOutStudent,cloudStatus,downloadProgressConflict,openProgressServerCopy,saveCloudProgress} from './store.js';
 import {inspect,withInputs,checkStructure,sameOutput,scoreQuiz,errorText} from './engine.js';
 import {execute,cancelRuns} from './runtime.js';
+import {showArchivedProgress} from '../../../lib/student/cloud.ts';
 import {enterLesson} from '../../../lib/student/entry.ts';
 import {MAX_TEACHER_NAME_LENGTH} from '../../../lib/student/identity.ts';
 import {showGuidance,watchGuidance} from '../../../lib/student/guidance.ts';
@@ -43,6 +44,8 @@ function render(){
  saveActions.className='classroom-save-actions';
  saveActions.innerHTML='<span id="progress-save-status" role="status"></span><button class="classroom-save-button" type="button" data-action="save-progress">Ахиц хадгалах</button>';
  saveActions.querySelector('span').textContent=cloudStatus;
+ const archive=document.createElement('span');archive.className='classroom-archive-actions';
+ showArchivedProgress(archive,'javascript',studentId);saveActions.append(archive);
  app.querySelector('.app-body main')?.prepend(saveActions);
  app.querySelector('.app-body main')?.prepend(guidance);
  stopGuidance??=watchGuidance(studentId,'javascript',entries=>showGuidance(guidance,entries));
@@ -148,7 +151,7 @@ function renderStudentGate(){
  <div class="classroom-code" aria-label="Код ба үр дүнгийн жишээ"><div class="classroom-code-file">${icon('code-2')}<span>hello.js</span><span>Жишээ</span></div><pre>${esc('let name = "Билгүүн";\nconsole.log("Сайн уу, " + name);')}</pre><div class="classroom-code-output"><span>ҮР ДҮН</span><pre>Сайн уу, Билгүүн</pre>${icon('check')}</div></div>
  <ul class="classroom-features"><li>${icon('check')}${exercises.length} дасгал</li><li>${icon('check')}Мэдлэгийн сорил</li><li>${icon('check')}Чөлөөт код</li></ul></section>
  <section class="classroom-entry-card" aria-labelledby="entry-heading"><div class="classroom-entry-icon">${icon('code-2')}</div><p class="classroom-eyebrow">ТАНЫ СУРАЛЦАХ ОРОН ЗАЙ</p><h2 id="entry-heading">Хичээлдээ тавтай морил.</h2><p class="classroom-entry-description">Сурагч бол ID-гаа, багш бол бүтэн нэрээ бичээрэй.</p>
- <form id="student-entry-form"><label for="student-id">Сурагчийн ID эсвэл багшийн бүтэн нэр</label><input id="student-id" name="studentId" placeholder="Жишээ: 8A-01" maxlength="${MAX_TEACHER_NAME_LENGTH}" autocomplete="username" autocapitalize="none" spellcheck="false" required aria-describedby="student-id-help student-id-error"><p id="student-id-help" class="classroom-field-help">Багш бүртгэл дэх овог, нэр эсвэл нэвтрэх нэрээ ашиглаж болно.</p><p id="student-id-error" class="classroom-entry-error" role="alert"></p><button class="classroom-enter" type="submit">Хичээлд орох ${icon('arrow-right')}</button></form>
+ <form id="student-entry-form"><label for="student-id">Сурагчийн ID эсвэл багшийн бүтэн нэр</label><input id="student-id" name="studentId" placeholder="Жишээ: 8A-01" maxlength="${MAX_TEACHER_NAME_LENGTH}" autocomplete="username" autocapitalize="none" spellcheck="false" required aria-describedby="student-id-help student-id-error"><label for="lesson-credential">Хичээлийн код эсвэл багшийн нууц үг</label><input id="lesson-credential" type="password" autocomplete="off" required maxlength="1024"><p id="student-id-help" class="classroom-field-help">Багш бүртгэл дэх овог, нэр эсвэл нэвтрэх нэрээ ашиглаж болно.</p><p id="student-id-error" class="classroom-entry-error" role="alert"></p><button class="classroom-enter" type="submit">Хичээлд орох ${icon('arrow-right')}</button></form>
  <div class="classroom-save-note">${icon('check-circle-2')}<div><strong>Эхэлсэн газраасаа үргэлжлүүлнэ</strong><p>Код, ахиц тань хадгалагдана. Өөр компьютер дээр ч өөрийн ID эсвэл нэрээр ороорой.</p></div></div><p class="classroom-id-note">Зөвхөн өөрийн ID эсвэл нэрийг ашиглаарай.</p></section></main>
  <footer class="classroom-entry-footer"><span>Кодоо бич. Турш. Дахин оролд.</span><span>КодЛаб · JavaScript</span></footer></div>`;
  decorate();
@@ -159,7 +162,8 @@ app.addEventListener('submit',async e=>{
  try{
   const button=e.target.querySelector('button[type="submit"]');
   if(button.disabled)return;button.disabled=true;button.textContent="Ахиц ачаалж байна…";input.readOnly=true;e.target.setAttribute("aria-busy","true");
-  await enterLesson(input.value,selectCloudStudent);quizResult=null;hint=0;output=[];checks=[];runError='';
+  const credential=e.target.querySelector("#lesson-credential").value;
+  await enterLesson(input.value,credential,selectCloudStudent);quizResult=null;hint=0;output=[];checks=[];runError='';
   const restored=exercises.find(ex=>ex.id===state.active)||exercises[0];
   if(!location.hash)history.replaceState(null,'',state.attempt?'#/tests':'#/exercises/'+restored.id);
   route();
@@ -175,6 +179,9 @@ app.addEventListener('submit',async e=>{
 window.addEventListener('hashchange',route);route();
 window.addEventListener('pageshow',event=>{if(event.persisted&&studentId){signOutStudent();quizResult=null;render();}});
 
-window.addEventListener('kodlab-cloud',()=>{let el=document.querySelector('#cloud-status');if(!el){el=document.createElement('p');el.id='cloud-status';el.setAttribute('role','status');el.className='classroom-cloud-status';document.body.append(el);}const attention=/хадгалаагүй|боломжгүй|Өөр цонхонд/.test(cloudStatus);el.hidden=!studentId||!attention;el.dataset.attention=String(attention);el.textContent=cloudStatus;if(cloudStatus.includes('Өөр цонхонд')){const button=document.createElement('button');button.textContent='Ажлаа татаж, серверийн ахицыг ачаалах';button.addEventListener('click',recoverCloudProgress);el.append(button);}document.querySelector('#save-status')?.replaceChildren(document.createTextNode(cloudStatus));document.querySelector('#progress-save-status')?.replaceChildren(document.createTextNode(cloudStatus));});
+window.addEventListener('kodlab-cloud',()=>{let el=document.querySelector('#cloud-status');if(!el){el=document.createElement('p');el.id='cloud-status';el.setAttribute('role','status');el.className='classroom-cloud-status';document.body.append(el);}const attention=/хадгалаагүй|боломжгүй|Өөр цонхонд|нэвтрэлт дууслаа/.test(cloudStatus);el.hidden=!studentId||!attention;el.dataset.attention=String(attention);el.textContent=cloudStatus;if(cloudStatus.includes('Өөр цонхонд')){const button=document.createElement('button');button.textContent='Хадгалаагүй ажлаа татах';button.addEventListener('click',downloadProgressConflict);
+ const serverCopy=document.createElement('button');serverCopy.textContent='Серверийн хувилбарыг нээх';
+ serverCopy.addEventListener('click',openProgressServerCopy);
+ el.append(button,serverCopy);}document.querySelector('#save-status')?.replaceChildren(document.createTextNode(cloudStatus));document.querySelector('#progress-save-status')?.replaceChildren(document.createTextNode(cloudStatus));});
 
 app.addEventListener('input',event=>{if(event.target.id==='student-id'){event.target.removeAttribute('aria-invalid');document.querySelector('#student-id-error').textContent='';}});

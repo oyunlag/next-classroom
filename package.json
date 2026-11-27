@@ -19,7 +19,8 @@
     "pretest": "npm run kodlab:test",
     "kodlab:build": "npm run build --workspace @oyunlag/kodlab",
     "kodlab:dev": "npm run dev --workspace @oyunlag/kodlab",
-    "kodlab:test": "npm run test --workspace @oyunlag/kodlab"
+    "kodlab:test": "npm run test --workspace @oyunlag/kodlab",
+    "verify:release": "node scripts/verify-release.mjs"
   },
   "dependencies": {
     "@codemirror/lang-css": "6.3.1",

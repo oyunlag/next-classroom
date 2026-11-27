@@ -1,6 +1,7 @@
 "use client";
 
 import TeacherGuidance from "@/components/student/TeacherGuidance";
+import ConflictActions from "@/components/student/ConflictActions";
 import ProgressSaveButton from "@/components/student/ProgressSaveButton";
 
 import Link from "next/link";
@@ -67,7 +68,8 @@ type Props = {
   sampleImage: string;
   onChange: (progress: Progress) => void;
   onSave: () => Promise<boolean>;
-  onRecover: () => void;
+  onDownloadConflict: () => void;
+  onOpenServerCopy: () => void;
   onSwitchStudent: () => void;
 };
 type View = "exercises" | "lessons" | "play";
@@ -86,7 +88,8 @@ export default function Workspace({
   sampleImage,
   onChange,
   onSave,
-  onRecover,
+  onDownloadConflict,
+  onOpenServerCopy,
   onSwitchStudent,
 }: Props) {
   const exercise = findExercise(progress.active);
@@ -366,7 +369,7 @@ export default function Workspace({
       </header>
       <div className="classroom-save-actions">
         <span role="status">{messages[status]}</span>
-        <ProgressSaveButton onSave={onSave} />
+        <ProgressSaveButton onSave={onSave} course="htmlcss" studentId={student} />
       </div>
       <TeacherGuidance studentId={student} course="htmlcss" />
       <div className={styles.appBody}>
@@ -831,13 +834,7 @@ export default function Workspace({
                   {status === "conflict" && (
                     <div className={styles.saveWarning}>
                       <p>{messages.conflict}</p>
-                      <button
-                        type="button"
-                        className={styles.secondary}
-                        onClick={onRecover}
-                      >
-                        Хуулбараа татаж, серверээс ачаалах
-                      </button>
+                      <ConflictActions onDownload={onDownloadConflict} onOpenServerCopy={onOpenServerCopy} />
                     </div>
                   )}
                 </section>

@@ -14,7 +14,7 @@ import {
   getAdminIdentity,
   createAdminSession,
 } from "./auth";
-import { applyLmsImport, parseLmsImport } from "./lms-import";
+import { applyLmsImport, parseLmsImport, previewLmsImport } from "./lms-import";
 import { schoolFixture } from "./test-fixtures";
 import { backfillSummaries } from "./data";
 import { catalog } from "./progress";
@@ -23,7 +23,13 @@ import {
   POST as login,
   DELETE as logout,
 } from "../../app/api/admin/session/route";
-import { GET as studentDetail } from "../../app/api/admin/student/route";
+import {
+  GET as studentDetail,
+  POST as issueStudentAccess,
+} from "../../app/api/admin/student/route";
+import { lessonSession, studentSession } from "../student/test-session";
+import { classroomOverview, saveClassroom } from "./classroom-data";
+import { schoolDay } from "../student/classroom";
 import { POST as progress } from "../../app/api/progress/route";
 
 test(
@@ -60,6 +66,7 @@ test(
     process.env.MONGODB_DB = "admin_test";
     process.env.ADMIN_RATE_LIMIT_KEY = "integration-key";
     const client = new MongoClient(uri, { serverSelectionTimeoutMS: 10000 });
+    const learnerTokens = new Map<string, string>();
     const request = (path: string, body?: unknown, cookie = "") =>
       new Request(`https://example.test${path}`, {
         method: body === undefined ? "GET" : "POST",
@@ -67,6 +74,14 @@ test(
           "Content-Type": "application/json",
           Origin: "https://example.test",
           Cookie: cookie,
+          ...(path === "/api/progress" &&
+          body &&
+          typeof body === "object" &&
+          "studentId" in body
+            ? {
+                Authorization: `Bearer ${learnerTokens.get(String(body.studentId).toUpperCase()) ?? ""}`,
+              }
+            : {}),
         },
         ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       });
@@ -108,6 +123,20 @@ test(
           teacherIds: ["teacher"],
         })),
       );
+      assert.equal(
+        (
+          await issueStudentAccess(
+            request("/api/admin/student", { studentId: "001" }),
+          )
+        ).status,
+        401,
+      );
+      const issued = await issueStudentAccess(
+        request("/api/admin/student", { studentId: "001" }, cookie),
+      );
+      assert.equal(issued.status, 200);
+      const issuedCode = (await issued.json()).code;
+      learnerTokens.set("001", (await lessonSession("001", issuedCode)).token);
       const first = catalog.python[0].id;
       const snapshot = {
         version: 1,
@@ -140,7 +169,7 @@ test(
           completed: [catalog.javascript[0].id],
         }),
       });
-      assert.equal(await backfillSummaries(), 1);
+
       const overview = await GET(request("/api/admin", undefined, cookie));
       assert.equal(overview.status, 200);
       assert.match(overview.headers.get("cache-control")!, /no-store/);
@@ -150,6 +179,7 @@ test(
       assert.equal(roster.students.length, 2);
       assert.equal(roster.students[0].courses.python.completed, 1);
       assert.equal(roster.students[1].courses.javascript.completed, 1);
+      assert.equal(await backfillSummaries(), 1);
       assert.equal(
         (
           await POST(
@@ -357,8 +387,8 @@ test(
         setupCodes.set(id, secret);
       });
       for (const [id, code] of setupCodes) {
-        const temporaryPassword =
-          id === "alpha" ? "alpha@oyunlag.edu.mn" : code;
+        const temporaryPassword = code;
+        assert.equal(await authenticateAdmin(id, `${id}@oyunlag.edu.mn`), null);
         const challenge = await login(
           request("/api/admin/session", {
             username: id,
@@ -561,7 +591,7 @@ test(
             }),
           )
         ).status,
-        403,
+        401,
       );
       assert.equal(
         (
@@ -622,8 +652,8 @@ test(
       };
       await db.collection("student_groups").insertOne({
         _id: "test-shared-class" as never,
-        name: "7Г",
-        key: "test-shared-class",
+        name: "7Г Туршилт",
+        key: "7г туршилт",
         grade: 7,
         teacherIds: ["beta", "gamma"],
         createdAt: new Date(),
@@ -685,6 +715,7 @@ test(
         creationResponses.every((r) => r.status === 200),
         "Identical concurrent retries are idempotent",
       );
+      learnerTokens.set("20S0999", await studentSession("20S0999", "beta"));
       const added = await db
         .collection("student_profiles")
         .findOne({ _id: "20S0999" as never });
@@ -774,6 +805,59 @@ test(
         await db.collection("exam_attempts").findOne({ studentId: "20S0999" }),
         examBefore,
       );
+      // A valid LMS refresh can recognize this known manual enrollment, then link it with approval.
+      const linkedPlan = {
+        teachers: [],
+        groups: [
+          {
+            sourceId: "manual-link-class",
+            name: "TEST SHARED CLASS",
+            grade: 7,
+            teacherIds: ["beta", "gamma"],
+          },
+        ],
+        students: [
+          {
+            id: "20S0999",
+            sourceId: "official-student",
+            name: added.name,
+            classSourceId: "manual-link-class",
+            teacherIds: ["beta"],
+          },
+        ],
+      };
+      const sharedClass = await db
+        .collection("student_groups")
+        .findOne({ _id: "test-shared-class" as never });
+      assert.ok(sharedClass);
+      linkedPlan.groups[0].name = sharedClass.name;
+      assert.deepEqual(
+        (await previewLmsImport(linkedPlan)).manualLinks.map(({ id }) => id),
+        ["20S0999"],
+      );
+      await assert.rejects(
+        applyLmsImport(linkedPlan, async () => {}),
+        /explicit --link-manual/,
+      );
+      await applyLmsImport(linkedPlan, async () => {}, ["20S0999"]);
+      await applyLmsImport(linkedPlan, async () => {}, ["20S0999"]);
+      const linked = await db
+        .collection("student_profiles")
+        .findOne({ _id: "20S0999" as never });
+      assert.equal(linked?.sourceId, "official-student");
+      assert.equal(linked?.manualEnrollment, undefined);
+      assert.equal(linked?.lessonAccessDigest, added.lessonAccessDigest);
+      assert.deepEqual(
+        await db
+          .collection("student_progress")
+          .findOne({ studentId: "20S0999" }),
+        workBefore,
+      );
+      assert.deepEqual(
+        await db.collection("exam_attempts").findOne({ studentId: "20S0999" }),
+        examBefore,
+      );
+
       await db
         .collection("student_profiles")
         .updateOne(
@@ -785,6 +869,153 @@ test(
         409,
         "Adding cannot silently restore a deleted student",
       );
+      const now = new Date();
+      const today = schoolDay(now);
+      const yesterday = schoolDay(new Date(now.getTime() - 86_400_000));
+      const before = new Date(yesterday + "T01:00:00.000Z");
+      await db.collection("student_groups").insertMany([
+        {
+          _id: "history-a" as never,
+          name: "History A",
+          key: "history a",
+          teacherIds: ["beta"],
+        },
+        {
+          _id: "history-b" as never,
+          name: "History B",
+          key: "history b",
+          teacherIds: ["beta"],
+        },
+      ]);
+      const learnerId = "20S8999";
+      const progressId = "javascript:" + learnerId;
+      await db.collection("student_profiles").insertOne({
+        _id: learnerId as never,
+        name: "History student",
+        sourceId: "history-student",
+        groupId: "history-a",
+        teacherIds: ["beta"],
+        notes: "",
+      });
+      learnerTokens.set(learnerId, await studentSession(learnerId, "beta"));
+      const sendLesson = (body: Record<string, unknown>) =>
+        progress(
+          request("/api/progress", {
+            course: "javascript",
+            studentId: learnerId,
+            ...body,
+          }),
+        );
+      const savedProgress = {
+        active: "name",
+        completed: ["name"],
+        drafts: { name: "const name = 'test';" },
+      };
+      await db
+        .collection("student_course_entries")
+        .insertOne({ _id: progressId as never, days: { [yesterday]: before } });
+      await db.collection("student_progress").insertOne({
+        _id: progressId as never,
+        studentId: learnerId,
+        course: "javascript",
+        revision: 1,
+        updatedAt: before,
+        progressJson: JSON.stringify(savedProgress),
+        classroomDays: {
+          [yesterday]: {
+            savedAt: before,
+            completed: 1,
+            attempted: 1,
+            assisted: 0,
+          },
+        },
+      });
+      assert.equal((await sendLesson({ action: "load" })).status, 200);
+      assert.equal(
+        (
+          await sendLesson({
+            action: "save",
+            revision: 1,
+            progress: { ...savedProgress, active: "age" },
+          })
+        ).status,
+        200,
+      );
+      const row = (
+        await (await GET(request("/api/admin", undefined, betaCookie))).json()
+      ).students.find((student: { id: string }) => student.id === learnerId);
+      assert.equal(
+        row.updatedAt,
+        before.toISOString(),
+        "Navigation cannot update the last-work timestamp",
+      );
+      assert.equal(
+        (
+          await POST(
+            request(
+              "/api/admin",
+              {
+                action: "assign",
+                groupId: "history-b",
+                studentIds: [learnerId],
+              },
+              betaCookie,
+            ),
+          )
+        ).status,
+        200,
+      );
+      assert.equal((await sendLesson({ action: "load" })).status, 200);
+      assert.equal(
+        (
+          await sendLesson({
+            action: "save",
+            revision: 2,
+            progress: {
+              ...savedProgress,
+              drafts: { name: "const name = 'changed';" },
+            },
+          })
+        ).status,
+        200,
+      );
+      const report = (groupId: string, day: string) =>
+        classroomOverview("beta", { groupId, course: "javascript", day });
+      assert.equal(
+        (await report("history-a", yesterday)).students[0].activity.enteredAt,
+        before.toISOString(),
+      );
+      assert.equal(
+        (await report("history-a", yesterday)).students[0].activity.work
+          ?.completed,
+        1,
+      );
+      assert.equal((await report("history-b", yesterday)).students.length, 0);
+      assert.ok(
+        (await report("history-a", today)).students[0].activity.enteredAt,
+      );
+      assert.equal(
+        (await report("history-a", today)).students[0].activity.work,
+        undefined,
+      );
+      assert.equal(
+        (await report("history-b", today)).students[0].activity.work?.completed,
+        1,
+      );
+      await saveClassroom("beta", {
+        action: "support",
+        studentId: learnerId,
+        course: "javascript",
+        id: "a".repeat(32),
+        kind: "instruction",
+        instruction: "Private lesson guidance",
+        note: "Internal teacher note",
+      });
+      const guidance = await sendLesson({ action: "guidance" });
+      assert.equal(guidance.status, 200);
+      const delivered = await guidance.text();
+      assert.ok(delivered.includes("Private lesson guidance"));
+      assert.ok(!delivered.includes("Internal teacher note"));
     } finally {
       await client.close();
       const pool = globalThis as typeof globalThis & {

@@ -8,11 +8,39 @@ export type ProgressDocument = {
   progressJson: string;
   revision: number;
   updatedAt: Date;
+  lastWorkAt?: Date | null;
   adminSummaryRevision?: number;
   adminSummary?: import("../admin/types").CourseSummary;
   classroomDays?: Record<string, DailyWork<Date>>;
+  classroomGroupDays?: Record<string, Record<string, DailyWork<Date>>>;
 };
-type CourseEntryDocument = { _id: string; days: Record<string, Date> };
+export type ClassroomMembership = {
+  groupId: string;
+  teacherIds: string[];
+  name: string;
+  since: string | null;
+  until: string;
+};
+export type StudentProfile = {
+  _id: string;
+  name: string;
+  notes: string;
+  groupId: string | null;
+  updatedAt: Date;
+  sourceId?: string;
+  manualEnrollment?: boolean;
+  teacherIds?: string[];
+  deletedAt?: Date;
+  deletedBy?: string;
+  lessonAccessDigest?: string;
+  classroomSince?: string;
+  classroomHistory?: ClassroomMembership[];
+};
+type CourseEntryDocument = {
+  _id: string;
+  days: Record<string, Date>;
+  groupDays?: Record<string, Record<string, Date>>;
+};
 const pool = globalThis as typeof globalThis & {
   classroomMongo?: Promise<MongoClient>;
 };
@@ -41,5 +69,11 @@ export async function progressCollection() {
 export async function courseEntryCollection() {
   return (await classroomDatabase()).collection<CourseEntryDocument>(
     "student_course_entries",
+  );
+}
+
+export async function studentProfiles() {
+  return (await classroomDatabase()).collection<StudentProfile>(
+    "student_profiles",
   );
 }

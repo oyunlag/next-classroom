@@ -1,3 +1,4 @@
+import { clearLessonToken } from "../student/entry";
 import {
   emptyProgress,
   normalizeStudent,
@@ -29,7 +30,8 @@ const cloud = createCloudProgress("python", (status) => {
   state = { ...state, cloudStatus: messages[status] };
   emit();
 });
-export const recoverCloudProgress = () => cloud.recover();
+export const downloadProgressConflict = () => cloud.downloadConflict();
+export const openProgressServerCopy = () => cloud.openServerCopy();
 export const savePythonProgress = () => cloud.saveNow();
 export const getState = () => state;
 export const getServerState = () => server;
@@ -43,7 +45,7 @@ export function subscribe(listener: () => void) {
     listeners.delete(listener);
   };
 }
-export async function login(value: string) {
+export async function login(value: string, token: string) {
   const student = normalizeStudent(value);
   if (!validStudent(student))
     throw new Error(
@@ -55,7 +57,7 @@ export async function login(value: string) {
   } catch {
     /* optional cache */
   }
-  const remote = await cloud.load(student, local);
+  const remote = await cloud.load(student, local, token);
   state = {
     ...state,
     ready: true,
@@ -68,6 +70,7 @@ export async function login(value: string) {
 }
 export function logout() {
   cloud.stop();
+  clearLessonToken();
   state = {
     ...state,
     student: null,

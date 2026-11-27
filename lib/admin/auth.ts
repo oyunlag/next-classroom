@@ -39,9 +39,7 @@ export async function authenticateAdmin(
     password,
     account?.passwordHash || `scrypt:${"0".repeat(32)}:${"0".repeat(128)}`,
   );
-  if (!account) return null;
-  if (account.setupRequired && password === account.email) return account;
-  return valid && password !== account.email ? account : null;
+  return account && valid && password !== account.email ? account : null;
 }
 export async function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
@@ -81,7 +79,10 @@ export async function authCollections() {
   ]);
   return { sessions, attempts };
 }
-export async function allowLogin(request: Request) {
+export async function allowLogin(
+  request: Request,
+  scope: "admin" | "lesson" = "admin",
+) {
   const { attempts } = await authCollections();
   const windowMs = 15 * 60 * 1000;
   const now = Date.now();
@@ -97,7 +98,8 @@ export async function allowLogin(request: Request) {
   )
     .update(address)
     .digest("hex");
-  const _id = `${Math.floor(now / windowMs)}:${addressHash}`;
+  const key = `${Math.floor(now / windowMs)}:${addressHash}`;
+  const _id = scope === "lesson" ? `lesson:${key}` : key;
   const attempt = await attempts.findOneAndUpdate(
     { _id },
     {

@@ -1,40 +1,55 @@
 import { timeoutSignal } from "../http/timeout";
 import { messages } from "./cloud";
-import { normalizeStudentId, normalizeTeacherName } from "./identity";
+import { normalizeStudentId } from "./identity";
+
+let lesson: { id: string; token: string } | undefined;
+
+export function lessonToken(id: string) {
+  return lesson?.id === id ? lesson.token : undefined;
+}
+
+export function clearLessonToken() {
+  lesson = undefined;
+}
 
 export async function enterLesson(
-  value: string,
-  login: (id: string) => Promise<unknown>,
+  identity: string,
+  credential: string,
+  login: (id: string, token: string) => Promise<unknown>,
 ) {
-  const name = normalizeTeacherName(value);
-  if (!name) return login(value);
-
-  if (/^\p{L}[\p{L}.-]{1,39}$/u.test(name)) {
-    try {
-      return await login(value);
-    } catch (error) {
-      if (!(
-        error instanceof Error &&
-        "status" in error &&
-        error.status === 403
-      ))
-        throw error;
-    }
-  }
-
-  const response = await fetch("/api/progress", {
+  const response = await fetch("/api/progress/session", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "resolve-teacher", name }),
+    body: JSON.stringify({ identity, credential }),
     signal: timeoutSignal(15000),
   });
-  if (response.status === 403)
-    throw new Error(
-      "Багшийн нэр олдсонгүй эсвэл давхцаж байна. Бүтэн нэрээ шалгах эсвэл нэвтрэх нэрээ ашиглаарай.",
+  const result: unknown = await response.json().catch(() => null);
+  if (!response.ok)
+    throw Object.assign(
+      new Error(
+        result &&
+          typeof result === "object" &&
+          "error" in result &&
+          typeof result.error === "string"
+          ? result.error
+          : messages.offline,
+      ),
+      { status: response.status },
     );
-  if (!response.ok) throw new Error(messages.offline);
-  const result: unknown = await response.json();
-  if (!result || typeof result !== "object" || !("id" in result))
+  if (
+    !result ||
+    typeof result !== "object" ||
+    !("id" in result) ||
+    !("token" in result) ||
+    typeof result.token !== "string"
+  )
     throw new Error(messages.offline);
-  return login(normalizeStudentId(result.id));
+  const next = { id: normalizeStudentId(result.id), token: result.token };
+  lesson = next;
+  try {
+    return await login(next.id, next.token);
+  } catch (error) {
+    if (lesson === next) clearLessonToken();
+    throw error;
+  }
 }

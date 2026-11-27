@@ -212,7 +212,7 @@ export default function ClassroomMonitor({
       ...student,
       completed,
       state: attendance(student.activity),
-      missing: Math.max(0, target - completed),
+      missing: student.canViewWork ? Math.max(0, target - completed) : 0,
     };
   });
   const counts = {
@@ -265,9 +265,9 @@ export default function ClassroomMonitor({
           time(row.activity.enteredAt),
           time(row.activity.work?.savedAt),
           row.activity.work?.completed ?? "",
-          row.completed,
+          row.canViewWork ? row.completed : "",
           target || "",
-          target ? row.missing : "",
+          target && row.canViewWork ? row.missing : "",
         ]),
       ],
       `kodlab-classroom-${day}.csv`,
@@ -456,6 +456,7 @@ export default function ClassroomMonitor({
                             <button
                               className="admin-monitor-name"
                               onClick={() => onOpen(row.id, course)}
+                              disabled={!row.canViewWork}
                             >
                               <strong>{row.name || row.id}</strong>
                               <small>{row.id}</small>
@@ -481,7 +482,7 @@ export default function ClassroomMonitor({
                             )}
                           </td>
                           <td>
-                            <strong>{row.completed}</strong>
+                            <strong>{row.canViewWork ? row.completed : "—"}</strong>
                             <small className="admin-monitor-total">
                               {" "}
                               / {data.exerciseCount} дасгал
@@ -503,6 +504,7 @@ export default function ClassroomMonitor({
                             <button
                               className="admin-secondary admin-support-button"
                               onClick={() => setSupportId(row.id)}
+                              disabled={!row.canViewWork}
                             >
                               <LifeBuoy size={15} /> <span>Дэмжлэг</span>
                               <ChevronRight size={14} aria-hidden="true" />

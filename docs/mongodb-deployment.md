@@ -1,14 +1,8 @@
 # MongoDB student progress and hosting
 
-All three courses ask for a student ID, load that student's saved progress from
-`POST /api/progress`, and autosave drafts, completion, lesson selection and available
-quiz state to MongoDB. IDs stay strings (leading zeroes are preserved). Progress
-is isolated by course and normalized ID in `kodlab.student_progress`.
+All four courses authenticate students with their school ID and a teacher-issued lesson access code. The browser holds the resulting session in memory. The server checks the identity, expiry, and current credential on each progress or guidance request. MongoDB stores credential and session digests. The timed exam has its own teacher-issued access code and session.
 
-This is ID-only classroom access: knowing an ID allows reading and editing its
-progress. It is not authenticated school records or an exam grading system. Do
-not put names or other personal records in this database. PIN/SSO authentication
-would be a separate change for stronger access control.
+Before rollout, run `npx tsx scripts/provision-lesson-access.ts "<class name>"` to preview missing codes. Add `--apply` to issue codes only for those students, and distribute only the privately saved `confirmed.json` entries to their corresponding students. Teachers can issue or replace individual codes in student details after rollout. Existing course progress remains under the same normalized student IDs. Active teachers use their account password for lesson practice.
 
 ## Configure
 
@@ -29,8 +23,7 @@ MONGODB_DB=kodlab
 
 Neither variable uses `NEXT_PUBLIC_`. Credentials stay in the server runtime.
 MongoDB creates the database/collection on the first successful save. The `_id`
-combines course and student ID, using MongoDB's existing unique index. No migration
-or TTL deletion is required. Browser local storage is a fallback copy, not proof
+combines course and student ID, using MongoDB's existing unique index. Existing progress documents keep their IDs. Lesson sessions expire after eight hours and MongoDB removes expired sessions. Browser local storage is a fallback copy, not proof
 of a successful server save. Login fails visibly when the server cannot load
 progress, rather than replacing existing remote work with a blank profile.
 
@@ -72,7 +65,7 @@ https://www.mongodb.com/docs/atlas/pause-terminate-cluster/
 
 Writes are debounced and serialized. A revision comparison rejects an outdated
 browser's save with HTTP 409. Unsent edits remain in local storage; a conflict
-control downloads them before choosing the newer server copy. Failed saves retry
+control downloads a copy and keeps the browser draft. Opening the server copy keeps the draft in this browser. It remains available next to the save controls until the student explicitly removes it. Failed saves retry
 while the page remains open; after closing, the same browser can recover pending
 work. Wait for “Серверт хадгалагдсан” before switching devices. Storage-blocked
 browsers cannot preserve unsent work across a browser close.

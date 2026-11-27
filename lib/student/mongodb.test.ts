@@ -9,7 +9,13 @@ import { MongoClient } from "mongodb";
 import { POST } from "../../app/api/progress/route";
 import { GET as adminGet } from "../../app/api/admin/route";
 import { eligibleStudent } from "../exam/service";
-import { courses } from "./identity";
+import { courses, normalizeStudentId } from "./identity";
+import { hashPassword } from "../admin/auth";
+import {
+  lessonLoginRequest,
+  lessonSession,
+  studentSession,
+} from "./test-session";
 
 test(
   "real MongoDB: save/reload, course/student isolation, stale writes and concurrent first saves",
@@ -40,11 +46,15 @@ test(
     process.env.MONGODB_URI = uri;
     process.env.MONGODB_DB = "kodlab_test";
     const probe = new MongoClient(uri, { serverSelectionTimeoutMS: 10000 });
-    const send = async (body: Record<string, unknown>) => {
+    const tokens = new Map<string, string>();
+    const send = async (body: Record<string, unknown>, token?: string) => {
       const response = await POST(
         new Request("http://localhost/api/progress", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
           body: JSON.stringify(body),
         }),
       );
@@ -56,9 +66,11 @@ test(
       course = "python",
       revision = 0,
       progress = {},
-    ) => send({ action, studentId, course, revision, progress });
-    const resolveTeacher = (name: string) =>
-      send({ action: "resolve-teacher", name });
+    ) =>
+      send(
+        { action, studentId, course, revision, progress },
+        tokens.get(normalizeStudentId(studentId)),
+      );
     try {
       await probe.connect();
       const db = probe.db("kodlab_test");
@@ -66,14 +78,33 @@ test(
         ["001", "002", "003"].map((id) => ({
           _id: id as never,
           sourceId: "source-" + id,
+          teacherIds: ["fixture-teacher"],
         })),
       );
-      for (const id of ["1", "12", "UNKNOWN"])
+      for (const id of ["001", "1", "12", "UNKNOWN"])
         for (const course of courses) {
-          assert.equal((await call("load", id, course)).status, 403);
-          assert.equal((await call("save", id, course)).status, 403);
+          assert.equal((await call("load", id, course)).status, 401);
+          assert.equal((await call("save", id, course)).status, 401);
         }
       assert.equal(await db.collection("student_progress").countDocuments(), 0);
+      for (const id of ["001", "002", "003"])
+        tokens.set(id, await studentSession(id, "fixture-teacher"));
+      for (const action of ["load", "save", "guidance"])
+        assert.equal(
+          (
+            await send(
+              {
+                action,
+                course: "python",
+                studentId: "002",
+                revision: 0,
+                progress: {},
+              },
+              tokens.get("001"),
+            )
+          ).status,
+          401,
+        );
       assert.equal((await call("load")).data.progress, null);
       const progress = {
         completed: ["exercise-1"],
@@ -110,8 +141,8 @@ test(
           { _id: "001" as never },
           { $set: { deletedAt: new Date() } },
         );
-      assert.equal((await call("load")).status, 403);
-      assert.equal((await call("save", "001", "python", 2)).status, 403);
+      assert.equal((await call("load")).status, 401);
+      assert.equal((await call("save", "001", "python", 2)).status, 401);
       assert.equal(
         await db
           .collection("student_progress")
@@ -119,27 +150,58 @@ test(
         1,
       );
 
+      const teacherPassword = "Synthetic teacher password";
+      const passwordHash = await hashPassword(teacherPassword);
       const accounts = db.collection<{
         _id: string;
         name: string;
         active: boolean;
+        email: string;
+        passwordHash: string;
       }>("admin_accounts");
       await accounts.insertMany([
-        { _id: "orgilsaikhan.ch", name: "Туршилтын Багш", active: true },
-        { _id: "batzorig.b", name: "Өөр Багш", active: true },
-        { _id: "inactive.teacher", name: "Идэвхгүй Багш", active: false },
+        {
+          _id: "orgilsaikhan.ch",
+          name: "Туршилтын Багш",
+          active: true,
+          email: "teacher-one@example.test",
+          passwordHash,
+        },
+        {
+          _id: "batzorig.b",
+          name: "Өөр Багш",
+          active: true,
+          email: "teacher-two@example.test",
+          passwordHash,
+        },
+        {
+          _id: "inactive.teacher",
+          name: "Идэвхгүй Багш",
+          active: false,
+          email: "inactive@example.test",
+          passwordHash,
+        },
       ]);
-      const teacher = await resolveTeacher("  ТУРШИЛТЫН   багш  ");
-      assert.deepEqual(teacher, {
-        status: 200,
-        data: { id: "ORGILSAIKHAN.CH" },
-      });
-      assert.equal((await resolveTeacher("Бүртгэлгүй Багш")).status, 403);
-      assert.equal((await resolveTeacher("Идэвхгүй Багш")).status, 403);
+      const teacher = await lessonSession(
+        "  ТУРШИЛТЫН   багш  ",
+        teacherPassword,
+      );
+      assert.equal(teacher.id, "ORGILSAIKHAN.CH");
+      tokens.set(teacher.id, teacher.token);
+      const otherTeacher = await lessonSession("batzorig.b", teacherPassword);
+      tokens.set(otherTeacher.id, otherTeacher.token);
+      assert.equal(
+        (await lessonLoginRequest("Бүртгэлгүй Багш", teacherPassword)).status,
+        401,
+      );
+      assert.equal(
+        (await lessonLoginRequest("Идэвхгүй Багш", teacherPassword)).status,
+        401,
+      );
       for (const course of courses) {
         for (const id of ["unknown.teacher", "inactive.teacher"])
           for (const action of ["load", "save"])
-            assert.equal((await call(action, id, course)).status, 403);
+            assert.equal((await call(action, id, course)).status, 401);
 
         assert.equal(
           (await call("load", "orgilsaikhan.ch", course)).data.progress,
@@ -151,7 +213,7 @@ test(
           200,
         );
         assert.deepEqual(
-          (await call("load", teacher.data.id, course)).data.progress,
+          (await call("load", teacher.id, course)).data.progress,
           practice,
         );
         assert.equal(
@@ -172,20 +234,27 @@ test(
         { _id: "batzorig.b" },
         { $set: { name: "Туршилтын Багш" } },
       );
-      assert.equal((await resolveTeacher("Туршилтын Багш")).status, 403);
+      assert.equal(
+        (await lessonLoginRequest("Туршилтын Багш", teacherPassword)).status,
+        401,
+      );
       assert.equal((await call("load", "batzorig.b")).status, 200);
       await accounts.updateOne(
         { _id: "orgilsaikhan.ch" },
         { $set: { active: false } },
       );
-      assert.deepEqual(await resolveTeacher("Туршилтын Багш"), {
-        status: 200,
-        data: { id: "BATZORIG.B" },
-      });
+      assert.equal(
+        (await lessonSession("Туршилтын Багш", teacherPassword)).id,
+        "BATZORIG.B",
+      );
+      const replacement = await studentSession("003", "fixture-teacher");
+      assert.equal((await call("load", "003")).status, 401);
+      tokens.set("003", replacement);
+      assert.equal((await call("load", "003")).status, 200);
       for (const action of ["load", "save"])
         assert.equal(
           (await call(action, "orgilsaikhan.ch", "python", 1)).status,
-          403,
+          401,
         );
       assert.equal(
         await db

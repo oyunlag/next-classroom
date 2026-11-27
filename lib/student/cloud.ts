@@ -15,6 +15,8 @@ export const messages = {
   offline: "Серверт хадгалаагүй · холболтоо шалгана уу",
   examActive:
     "Шалгалт идэвхтэй байгаа тул хичээлд орох боломжгүй. Эхлээд шалгалтаа үргэлжлүүлнэ үү.",
+  sessionExpired:
+    "Хичээлийн нэвтрэлт дууслаа. Ажлаа хадгалахын тулд мөн адил ID-гаар дахин нэвтэрнэ үү.",
   rejected: "Ахиц хадгалах боломжгүй. Кодоо татаж аваад багшдаа хандана уу.",
   conflict:
     "Өөр цонхонд ахиц өөрчлөгдсөн. Өөрийн ажлыг татаад серверийн ахицыг ачаална уу.",
@@ -26,15 +28,17 @@ type Backup = {
   revision: number;
   pending: Snapshot;
   sent?: Snapshot;
+  archived: boolean;
 };
 type Session = {
   id: string;
   key: string;
+  token: string;
   revision: number;
   pending: Snapshot | null;
   sent: Snapshot | null;
   inFlight: Promise<boolean> | null;
-  blocked: "conflict" | "rejected" | "examActive" | null;
+  blocked: "conflict" | "rejected" | "examActive" | "sessionExpired" | null;
   inherited: Backup[];
   lastSaved: string;
   timer?: ReturnType<typeof setTimeout>;
@@ -58,6 +62,10 @@ function removeBackup({ key, raw }: Backup) {
   }
 }
 
+function progressBackupBase(course: Course, id: string) {
+  return `kodlab:cloud:${course}:${id}`;
+}
+
 function readBackups(base: string): Backup[] {
   const backups: Backup[] = [];
   try {
@@ -79,6 +87,7 @@ function readBackups(base: string): Backup[] {
           backups.push({
             key,
             raw,
+            archived: data.archived === true,
             revision: data.revision,
             pending: data.pending,
             sent: isProgressSnapshot(data.sent) ? data.sent : undefined,
@@ -93,6 +102,60 @@ function readBackups(base: string): Backup[] {
   return backups;
 }
 
+function downloadCopies(
+  course: Course,
+  id: string,
+  copies: Pick<Backup, "revision" | "pending">[],
+) {
+  const unique = [...new Set(copies.map((copy) => JSON.stringify(copy)))];
+  const blob = new Blob(["[" + unique.join(",") + "]"], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${course}-${id}-unsent.json`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export function showArchivedProgress(
+  host: HTMLElement,
+  course: Course,
+  id: string,
+) {
+  const archived = () =>
+    readBackups(progressBackupBase(course, id)).filter((copy) => copy.archived);
+  if (!archived().length) {
+    host.replaceChildren();
+    host.hidden = true;
+    return;
+  }
+  host.hidden = false;
+  const download = document.createElement("button");
+  download.type = "button";
+  download.className = "classroom-save-button";
+  download.textContent = "Нооргийн хуулбарыг татах";
+  download.onclick = () => {
+    const copies = archived().map(({ revision, pending }) => ({
+      revision,
+      pending,
+    }));
+    if (copies.length) downloadCopies(course, id, copies);
+  };
+  const discard = document.createElement("button");
+  discard.type = "button";
+  discard.className = "classroom-save-button";
+  discard.textContent = "Нооргийн хуулбарыг устгах";
+  discard.onclick = () => {
+    if (!window.confirm("Энэ хөтөчид үлдээсэн нооргийн хуулбарыг устгах уу?"))
+      return;
+    archived().forEach(removeBackup);
+    showArchivedProgress(host, course, id);
+  };
+  host.replaceChildren(download, discard);
+}
+
 export function createCloudProgress(
   course: Course,
   onStatus: (status: CloudStatus) => void = () => {},
@@ -103,11 +166,15 @@ export function createCloudProgress(
   };
   async function request(
     body: ProgressRequest,
+    token: string,
   ): Promise<{ revision: number; progress: Snapshot | null }> {
     const payload = JSON.stringify(body);
     const response = await fetch("/api/progress", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
       body: payload,
       keepalive:
         body.action === "save" &&
@@ -118,13 +185,15 @@ export function createCloudProgress(
     if (!response.ok)
       throw Object.assign(
         new Error(
-          response.status === 403
-            ? messages.unregistered
-            : response.status === 423
-              ? messages.examActive
-              : response.status === 409
-                ? messages.conflict
-                : messages.offline,
+          response.status === 401
+            ? messages.sessionExpired
+            : response.status === 403
+              ? messages.unregistered
+              : response.status === 423
+                ? messages.examActive
+                : response.status === 409
+                  ? messages.conflict
+                  : messages.offline,
         ),
         { status: response.status },
       );
@@ -169,16 +238,22 @@ export function createCloudProgress(
   }
   async function saveSnapshot(s: Session, progress: Snapshot) {
     try {
-      return await request({
-        action: "save",
-        course,
-        studentId: s.id,
-        revision: s.revision,
-        progress,
-      });
+      return await request(
+        {
+          action: "save",
+          course,
+          studentId: s.id,
+          revision: s.revision,
+          progress,
+        },
+        s.token,
+      );
     } catch (error) {
       if (statusCode(error) !== 409) throw error;
-      const remote = await request({ action: "load", course, studentId: s.id });
+      const remote = await request(
+        { action: "load", course, studentId: s.id },
+        s.token,
+      );
       if (
         remote.revision > s.revision &&
         JSON.stringify(remote.progress) === JSON.stringify(progress)
@@ -205,13 +280,15 @@ export function createCloudProgress(
     } catch (error) {
       const status = statusCode(error);
       s.blocked =
-        status === 423
-          ? "examActive"
-          : status === 409
-            ? "conflict"
-            : status >= 400 && status < 500 && ![408, 429].includes(status)
-              ? "rejected"
-              : null;
+        status === 401
+          ? "sessionExpired"
+          : status === 423
+            ? "examActive"
+            : status === 409
+              ? "conflict"
+              : status >= 400 && status < 500 && ![408, 429].includes(status)
+                ? "rejected"
+                : null;
       report(s, s.blocked ?? "offline");
       if (!s.blocked) schedule(s, 10000);
       return false;
@@ -251,11 +328,12 @@ export function createCloudProgress(
     session = null;
   }
   return {
-    async load(id: string, local: Snapshot): Promise<Snapshot> {
+    async load(id: string, local: Snapshot, token: string): Promise<Snapshot> {
       stop();
-      const base = `kodlab:cloud:${course}:${id}`;
+      const base = progressBackupBase(course, id);
       const s: Session = {
         id,
+        token,
         key: `${base}:pending:${crypto.getRandomValues(new Uint32Array(2)).join("-")}`,
         revision: 0,
         pending: null,
@@ -269,7 +347,10 @@ export function createCloudProgress(
       report(s, "loading");
       let remote;
       try {
-        remote = await request({ action: "load", course, studentId: id });
+        remote = await request(
+          { action: "load", course, studentId: id },
+          s.token,
+        );
       } catch (error) {
         if (session === s) session = null;
         throw error;
@@ -277,20 +358,24 @@ export function createCloudProgress(
       if (session !== s) throw new Error("Сурагч солигдсон. Дахин орно уу.");
       s.revision = remote.revision;
       s.lastSaved = JSON.stringify(remote.progress);
-      s.inherited = readBackups(base).flatMap((previous) => {
-        if (JSON.stringify(previous.pending) === s.lastSaved) {
-          removeBackup(previous);
-          return [];
-        }
-        if (
-          previous.revision + 1 === remote.revision &&
-          previous.sent &&
-          JSON.stringify(previous.sent) === s.lastSaved
-        ) {
-          return [{ ...previous, revision: remote.revision, sent: undefined }];
-        }
-        return [previous];
-      });
+      s.inherited = readBackups(base)
+        .filter((copy) => !copy.archived)
+        .flatMap((previous) => {
+          if (JSON.stringify(previous.pending) === s.lastSaved) {
+            removeBackup(previous);
+            return [];
+          }
+          if (
+            previous.revision + 1 === remote.revision &&
+            previous.sent &&
+            JSON.stringify(previous.sent) === s.lastSaved
+          ) {
+            return [
+              { ...previous, revision: remote.revision, sent: undefined },
+            ];
+          }
+          return [previous];
+        });
       const cached = s.inherited[0];
       const copies = new Set(
         s.inherited.map(({ revision, pending }) =>
@@ -329,29 +414,49 @@ export function createCloudProgress(
     },
     flush,
     saveNow,
-    recover() {
-      if (!session || session.blocked !== "conflict") return;
-      const copies = [
+    downloadConflict() {
+      if (!session || session.blocked !== "conflict" || !session.pending)
+        return;
+      downloadCopies(course, session.id, [
         ...session.inherited.map(({ revision, pending }) => ({
           revision,
           pending,
         })),
         { revision: session.revision, pending: session.pending },
-      ];
-      const blob = new Blob([JSON.stringify(copies, null, 2)], {
-        type: "application/json",
-      });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${course}-${session.id}-unsent.json`;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      session.inherited.forEach(removeBackup);
+      ]);
+    },
+    openServerCopy() {
+      const s = session;
+      if (!s || s.blocked !== "conflict" || !s.pending) return;
       try {
-        localStorage.removeItem(session.key);
-      } catch {}
-      clearTimeout(session.timer);
+        const owned = readBackups(progressBackupBase(course, s.id)).find(
+          (copy) => copy.key === s.key,
+        );
+        if (
+          !owned ||
+          JSON.stringify(owned.pending) !== JSON.stringify(s.pending)
+        )
+          throw new Error("Draft is unavailable");
+        for (const copy of [...s.inherited, owned]) {
+          if (localStorage.getItem(copy.key) !== copy.raw) {
+            if (copy === owned) throw new Error("Draft changed");
+            continue;
+          }
+          const archive = JSON.stringify({
+            ...JSON.parse(copy.raw),
+            archived: true,
+          });
+          localStorage.setItem(copy.key, archive);
+          if (copy === owned && localStorage.getItem(copy.key) !== archive)
+            throw new Error("Draft was not archived");
+        }
+      } catch {
+        window.alert(
+          "Нооргийн хуулбарыг энэ хөтөчид хадгалж чадсангүй. Ажлаа татаж аваад дахин оролдоорой.",
+        );
+        return;
+      }
+      clearTimeout(s.timer);
       session = null;
       location.reload();
     },
